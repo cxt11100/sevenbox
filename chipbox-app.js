@@ -1001,7 +1001,7 @@ try {
     return el;
   }
 
-  function ensureTrackLineEl(name, color) {
+  function ensureTrackLineEl(name, color, isSelf) {
     var layer = ensureCursorLayer();
     if (!layer) return null;
     var safe = String(name).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
@@ -1010,23 +1010,24 @@ try {
     if (!el) {
       el = document.createElement("div");
       el.id = id;
-      el.className = "sb-track-line";
+      el.className = "sb-track-line" + (isSelf ? " is-self" : "");
       el.innerHTML =
         '<div class="sb-track-tag"><span class="sb-cur-name"></span><span class="sb-cur-ch">0</span></div>';
       layer.appendChild(el);
     } else if (el.parentNode !== layer) {
       layer.appendChild(el);
     }
+    if (isSelf) el.classList.add("is-self");
+    else el.classList.remove("is-self");
     var line = color || "#ff5ec8";
     el.style.setProperty("--line", line);
     var nm = el.querySelector(".sb-cur-name");
-    if (nm) nm.textContent = name || "?";
+    if (nm) nm.textContent = isSelf ? ("you" ) : (name || "?");
     return el;
   }
 
-  // BeepBox track rows = .channelRow (height patternHeight=28). Position pink bar on selected track.
-  // Layer is the *visible* editor box — use viewport-relative rects only (no scrollLeft/Top double-count).
-  function measureChannelTrackRect(channel) {
+  // Thin vertical mark (like playhead) on ONE channel row only — not a full-width box.
+  function measureChannelTrackMark(channel) {
     var box = document.getElementById("beepboxEditorContainer");
     if (!box) return null;
     var ch = (channel | 0);
@@ -1034,65 +1035,103 @@ try {
     var boxRect = box.getBoundingClientRect();
     if (boxRect.width < 2 || boxRect.height < 2) return null;
 
-    function visRect(el, fullWidthEl) {
-      if (!el) return null;
-      var r = el.getBoundingClientRect();
-      var wEl = fullWidthEl || el;
-      var wr = wEl.getBoundingClientRect();
-      // clip to visible editor area
-      var top = r.top - boxRect.top;
-      var left = wr.left - boxRect.left;
-      var height = Math.max(r.height, 22);
-      var width = Math.max(wr.width, 80);
-      // hide if fully scrolled out of view
-      if (top + height < 0 || top > boxRect.height) return null;
-      if (left + width < 0 || left > boxRect.width) return null;
-      return {
-        left: Math.max(0, left),
-        top: top,
-        width: Math.min(width, boxRect.width - Math.max(0, left) + 4),
-        height: height
-      };
-    }
-
-    // Prefer mute column buttons / channel rows — exact row under numbers 0,1,2,3…
+    var PH = 28;
     var mute = box.querySelector(".muteEditor");
-    var trackArea = box.querySelector(".trackAndMuteContainer") || (mute && mute.parentNode);
-    if (mute && mute.children && mute.children.length) {
-      var btn = mute.children[ch];
-      if (btn) {
-        var m = visRect(btn, trackArea || mute);
-        if (m) return m;
+    var trackArea = box.querySelector(".trackAndMuteContainer");
+    var rowTop = null;
+    var rowH = PH;
+    var rowLeft = 0;
+
+    // Y = exact channel row (mute button / channel row), not whole editor height
+    if (mute && mute.children && mute.children[ch]) {
+      var br = mute.children[ch].getBoundingClientRect();
+      rowTop = br.top - boxRect.top;
+      rowH = Math.max(18, Math.min(36, br.height || PH));
+      rowLeft = br.left - boxRect.left;
+    } else {
+      var rows = box.querySelectorAll(".channelRow");
+      if (rows && rows[ch]) {
+        var rr = rows[ch].getBoundingClientRect();
+        rowTop = rr.top - boxRect.top;
+        rowH = Math.max(18, Math.min(36, rr.height || PH));
+        rowLeft = rr.left - boxRect.left;
       }
     }
-    var rows = box.querySelectorAll(".channelRow");
-    if (rows && rows[ch]) {
-      var m2 = visRect(rows[ch], trackArea || rows[ch]);
-      if (m2) return m2;
+    if (rowTop == null && trackArea) {
+      var tr0 = trackArea.getBoundingClientRect();
+      rowTop = (tr0.top - boxRect.top) + ch * PH;
+      rowH = PH;
+      rowLeft = tr0.left - boxRect.left;
     }
-    // fallback estimate (BeepBox Es.patternHeight = 28) — only if row DOM missing
-    var PH = 28;
-    var trackRoot = trackArea || box.querySelector(".beepboxEditor");
-    if (!trackRoot) return null;
-    var rootR = trackRoot.getBoundingClientRect();
-    var topEst = (rootR.top - boxRect.top) + ch * PH;
-    if (topEst + PH < 0 || topEst > boxRect.height) return null;
+    if (rowTop == null) return null;
+
+    // X = BeepBox playhead (beat tracker) if we can find it; else current bar in track grid
+    var markX = null;
+    try {
+      var scope = trackArea || box;
+      var rects = scope.querySelectorAll("svg rect");
+      var best = null;
+      for (var i = 0; i < rects.length; i++) {
+        var r = rects[i];
+        var rw = parseFloat(r.getAttribute("width") || "0");
+        var rh = parseFloat(r.getAttribute("height") || "0");
+        // playhead is a skinny tall rect (~2–4px wide, taller than one row)
+        if (rw > 0 && rw <= 5 && rh >= PH * 1.5) {
+          var gr = r.getBoundingClientRect();
+          if (gr.width > 0 && gr.height > 0) {
+            if (!best || gr.height > best.h) best = { x: gr.left + gr.width * 0.5, h: gr.height };
+          }
+        }
+      }
+      if (best) markX = best.x - boxRect.left;
+    } catch (ePh) {}
+
+    if (markX == null) {
+      try {
+        var d = doc();
+        var barW = 32;
+        var cells = box.querySelectorAll(".channelBox");
+        if (cells.length >= 2) {
+          var c0 = cells[0].getBoundingClientRect();
+          var c1 = cells[1].getBoundingClientRect();
+          if (c1.left > c0.left + 4) barW = c1.left - c0.left;
+        }
+        var muteW = 0;
+        if (mute) muteW = mute.getBoundingClientRect().width || 32;
+        var trackLeft = rowLeft;
+        if (trackArea) trackLeft = trackArea.getBoundingClientRect().left - boxRect.left;
+        var ph = 0;
+        if (d && d.synth && typeof d.synth.playhead === "number") ph = d.synth.playhead;
+        else if (d && typeof d.bar === "number") ph = d.bar;
+        markX = trackLeft + muteW + ph * barW;
+      } catch (e2) {
+        markX = rowLeft + 40;
+      }
+    }
+
+    // keep on-screen; still show if near edges (joiners used to lose marks)
+    markX = Math.max(2, Math.min(boxRect.width - 4, markX));
+    if (rowTop + rowH < -8 || rowTop > boxRect.height + 8) {
+      // scrolled away — pin into view at nearest edge so everyone still sees it
+      rowTop = Math.max(2, Math.min(boxRect.height - rowH - 2, rowTop));
+    }
+
     return {
-      left: Math.max(0, rootR.left - boxRect.left),
-      top: topEst,
-      width: Math.max(rootR.width, 80),
-      height: PH
+      left: markX,
+      top: rowTop + 1,
+      width: 3,
+      height: Math.max(16, rowH - 2)
     };
   }
 
-  function tagStackOffset(name, channel, allTargets, myName) {
+  function tagStackOffset(name, channel, allTargets) {
     // stagger labels when several people sit on the same track
     var ch = channel | 0;
     var idx = 0;
     var names = Object.keys(allTargets || {});
+    names.sort();
     for (var i = 0; i < names.length; i++) {
       var n = names[i];
-      if (n === myName) continue;
       var t = allTargets[n];
       if (!t) continue;
       var c = (typeof t.channel === "number" && !isNaN(t.channel)) ? (t.channel | 0) : 0;
@@ -1119,54 +1158,88 @@ try {
     return 1 - (1 - u) * (1 - u);
   }
 
+  function placeTrackMark(t, name, myName, myCh) {
+    if (!t) return;
+    var isSelf = name === myName;
+    var chN = (typeof t.channel === "number" && !isNaN(t.channel)) ? (t.channel | 0) : 0;
+    if (chN < 0) chN = 0;
+    // for self, always use live local channel (arrow keys update instantly)
+    if (isSelf) chN = myCh | 0;
+    t.channel = chN;
+    var same = !isSelf && chN === (myCh | 0);
+
+    var trEl = t.trackEl || ensureTrackLineEl(name, t.color, isSelf);
+    t.trackEl = trEl;
+    if (!trEl) return;
+    var rect = measureChannelTrackMark(chN);
+    if (!rect) {
+      trEl.style.display = "none";
+      return;
+    }
+    trEl.style.display = "block";
+    trEl.style.left = rect.left + "px";
+    trEl.style.top = rect.top + "px";
+    trEl.style.width = "3px";
+    trEl.style.height = rect.height + "px";
+    trEl.style.setProperty("--line", t.color || "#ff5ec8");
+    if (same) {
+      trEl.classList.add("same-ch");
+      trEl.classList.remove("dim-ch");
+    } else {
+      trEl.classList.remove("same-ch");
+      trEl.classList.add("dim-ch");
+    }
+    updateCursorLabel(trEl, isSelf ? "you" : name, chN, same);
+    var tag = trEl.querySelector(".sb-track-tag");
+    if (tag) {
+      var stack = tagStackOffset(name, chN, cursorTargets);
+      // labels sit above the line (pointing up); nudge sideways if stacked
+      tag.style.left = "50%";
+      tag.style.transform = "translate(calc(-50% + " + (stack * 56) + "px), -8px)";
+    }
+  }
+
   function startCursorAnim() {
     if (cursorRaf) return;
     var tick = function (nowStamp) {
       cursorRaf = requestAnimationFrame(tick);
       var now = nowStamp || (performance.now ? performance.now() : Date.now());
       var size = measureCursorLayer();
+      ensureCursorLayer(); // BeepBox redraw can steal the layer — keep it on top
       var myCh = currentChannel();
       var myName = getName();
       var names = Object.keys(cursorTargets);
+
+      // keep local track mark alive for everyone (host + joiners)
+      if (myName && room) {
+        var selfT = cursorTargets[myName];
+        if (!selfT) {
+          selfT = cursorTargets[myName] = {
+            channel: myCh | 0,
+            color: peerColorFor(myName, 0),
+            inside: false,
+            isSelf: true,
+            trackEl: null,
+            el: null
+          };
+        }
+        selfT.channel = myCh | 0;
+        selfT.color = peerColorFor(myName, 0);
+        placeTrackMark(selfT, myName, myName, myCh);
+      }
+
       for (var i = 0; i < names.length; i++) {
         var name = names[i];
         var t = cursorTargets[name];
-        if (!t || name === myName) continue;
+        if (!t) continue;
+        if (name === myName) continue; // already placed as self
 
         var chN = (typeof t.channel === "number" && !isNaN(t.channel)) ? (t.channel | 0) : 0;
         if (chN < 0) chN = 0;
         var same = chN === (myCh | 0);
 
-        // Pink track-selection bar always follows their channel (arrow keys left/right), not mouse
-        var trEl = t.trackEl || ensureTrackLineEl(name, t.color);
-        t.trackEl = trEl;
-        if (trEl) {
-          var rect = measureChannelTrackRect(chN);
-          if (rect) {
-            trEl.style.display = "block";
-            trEl.style.left = rect.left + "px";
-            trEl.style.top = rect.top + "px";
-            trEl.style.width = rect.width + "px";
-            trEl.style.height = rect.height + "px";
-            trEl.style.setProperty("--line", t.color || "#ff5ec8");
-            // same channel as you → ghostly; other tracks → solid
-            if (same) {
-              trEl.classList.add("same-ch");
-              trEl.classList.remove("dim-ch");
-            } else {
-              trEl.classList.remove("same-ch");
-              trEl.classList.add("dim-ch");
-            }
-            updateCursorLabel(trEl, name, chN, same);
-            var tag = trEl.querySelector(".sb-track-tag");
-            if (tag) {
-              var stack = tagStackOffset(name, chN, cursorTargets, myName);
-              tag.style.left = (4 + stack * 72) + "px";
-            }
-          } else {
-            trEl.style.display = "none";
-          }
-        }
+        // Thin playhead-style mark on their track (always — not only when mouse is inside)
+        placeTrackMark(t, name, myName, myCh);
 
         // Simple arrow cursor only when their mouse is over the editor
         var el = t.el || ensureCursorEl(name, t.color);
@@ -1252,9 +1325,12 @@ try {
     var myName = getName();
     var live = {};
     var now = performance.now ? performance.now() : Date.now();
+    // Always keep self in the map so joiners + host both see local track mark
+    if (myName) live[myName] = true;
+
     for (var i = 0; i < list.length; i++) {
       var p = list[i];
-      if (!p || !p.name || p.name === myName) continue;
+      if (!p || !p.name) continue;
       live[p.name] = true;
       var color = peerColorFor(p.name, i);
       var cur = cursorTargets[p.name];
@@ -1265,6 +1341,7 @@ try {
       var inside = hasX && hasY ? (p.inside !== false) : !!p.inside;
       var pCh = (p.channel != null && p.channel !== "" && !isNaN(+p.channel)) ? (+p.channel | 0) : 0;
       if (pCh < 0) pCh = 0;
+      var isSelf = p.name === myName;
 
       if (!cur) {
         cur = cursorTargets[p.name] = {
@@ -1276,41 +1353,49 @@ try {
           dy: ny != null ? ny : 0.5,
           segStart: now,
           segMs: 1,
-          channel: pCh,
-          inside: inside && nx != null && ny != null,
+          channel: isSelf ? currentChannel() : pCh,
+          inside: !isSelf && inside && nx != null && ny != null,
           color: color,
-          el: ensureCursorEl(p.name, color),
-          trackEl: ensureTrackLineEl(p.name, color),
+          isSelf: isSelf,
+          el: isSelf ? null : ensureCursorEl(p.name, color),
+          trackEl: ensureTrackLineEl(p.name, color, isSelf),
           lastNx: nx,
           lastNy: ny,
           lastCh: pCh
         };
       } else {
-        // always refresh channel so track bar moves when they switch with arrows
-        cur.channel = pCh;
+        // always refresh channel so track mark moves when they switch with arrows
+        if (!isSelf) cur.channel = pCh;
+        else cur.channel = currentChannel();
         cur.color = color;
-        if (hasX && hasY) {
-          cur.inside = p.inside !== false;
-          if (cur.lastNx !== nx || cur.lastNy !== ny) {
-            setCursorSample(cur, nx, ny, now);
-            cur.lastNx = nx;
-            cur.lastNy = ny;
+        cur.isSelf = isSelf;
+        if (!isSelf) {
+          if (hasX && hasY) {
+            cur.inside = p.inside !== false;
+            if (cur.lastNx !== nx || cur.lastNy !== ny) {
+              setCursorSample(cur, nx, ny, now);
+              cur.lastNx = nx;
+              cur.lastNy = ny;
+            }
+          } else if (p.inside === false) {
+            cur.inside = false;
           }
-        } else if (p.inside === false) {
-          cur.inside = false;
         }
         cur.lastCh = pCh;
-        if (!cur.el) cur.el = ensureCursorEl(p.name, color);
-        else {
-          cur.el.style.setProperty("--line", color);
-          cur.el.style.color = color;
+        if (!isSelf) {
+          if (!cur.el) cur.el = ensureCursorEl(p.name, color);
+          else {
+            cur.el.style.setProperty("--line", color);
+            cur.el.style.color = color;
+          }
         }
-        if (!cur.trackEl) cur.trackEl = ensureTrackLineEl(p.name, color);
+        if (!cur.trackEl) cur.trackEl = ensureTrackLineEl(p.name, color, isSelf);
         else cur.trackEl.style.setProperty("--line", color);
       }
     }
     Object.keys(cursorTargets).forEach(function (name) {
-      if (!live[name]) {
+      // never drop self while in a room
+      if (!live[name] && !(room && name === myName)) {
         try {
           var dead = cursorTargets[name];
           if (dead.el && dead.el.parentNode) dead.el.parentNode.removeChild(dead.el);
@@ -1907,6 +1992,7 @@ try {
     lastSentXY.x = x;
     lastSentXY.y = y;
     lastSentChannel = ch;
+    // Always publish channel so joiners see host track marks even if mouse is outside the grid
     var payload = {
       type: "presence",
       name: getName(),

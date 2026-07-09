@@ -511,41 +511,59 @@ body {
 .sb-remote-cursor.dim-ch {
   opacity: 0.85;
 }
-/* Track selection bar — sits on channel rows (0,1,2,3…), follows track not mouse */
+/*
+ * Track mark = thin vertical pink line (like BeepBox playhead), ONLY on that
+ * player's channel row — not a full-width box, not full editor height.
+ */
 .sb-track-line {
   position: absolute;
-  left: 0;
-  height: 28px;
+  width: 3px;
+  height: 26px;
+  margin-left: -1px;
   pointer-events: none;
   z-index: 41;
   box-sizing: border-box;
   --line: #ff5ec8;
-  border: 2px solid var(--line);
-  border-radius: 3px;
-  /* default / other channel = solid, easy to see */
+  border: none;
+  border-radius: 2px;
   opacity: 1;
-  background: rgba(255, 94, 200, 0.2);
-  box-shadow: 0 0 10px rgba(255, 94, 200, 0.45), inset 0 0 0 1px rgba(255,255,255,0.18);
+  background: var(--line);
+  box-shadow: 0 0 8px var(--line), 0 0 2px #fff;
+}
+/* little cap pointing up — sits on the track row like the beat tracker */
+.sb-track-line::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -5px;
+  width: 0;
+  height: 0;
+  margin-left: -4px;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 5px solid var(--line);
+  filter: drop-shadow(0 0 3px var(--line));
 }
 .sb-track-line .sb-track-tag {
   position: absolute;
-  left: 4px;
-  top: 50%;
-  transform: translateY(-50%);
+  left: 50%;
+  bottom: 100%;
+  top: auto;
+  transform: translate(-50%, -8px);
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 1px 6px;
+  gap: 3px;
+  padding: 1px 5px;
   border-radius: 4px;
-  font: 800 10px/1.2 system-ui, -apple-system, "Segoe UI", sans-serif;
+  font: 800 9px/1.2 system-ui, -apple-system, "Segoe UI", sans-serif;
   color: #1a1020;
   background: var(--line);
   white-space: nowrap;
-  max-width: 140px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+  max-width: 110px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
 }
 .sb-track-line .sb-track-tag .sb-cur-name {
-  max-width: 80px;
+  max-width: 64px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -556,42 +574,39 @@ body {
   background: rgba(0,0,0,0.22);
   color: #fff;
 }
-/* Soft pulse so ghost same-ch still reads as active */
-@keyframes sb-ghost-track {
-  0%, 100% { opacity: 0.34; }
-  50% { opacity: 0.5; }
+.sb-track-line.is-self .sb-track-tag {
+  outline: 1px dashed rgba(255,255,255,0.7);
 }
-/* Same channel as you → ghostly (both can see you share the track) */
+/* Soft pulse when same channel as you */
+@keyframes sb-ghost-track {
+  0%, 100% { opacity: 0.38; }
+  50% { opacity: 0.62; }
+}
 .sb-track-line.same-ch {
-  border-style: dashed;
-  border-width: 2px;
-  background: rgba(255, 94, 200, 0.07);
-  box-shadow: 0 0 14px rgba(255, 94, 200, 0.28), inset 0 0 8px rgba(255, 255, 255, 0.06);
-  filter: saturate(0.75) brightness(1.08);
+  opacity: 0.48;
+  background: var(--line);
+  box-shadow: 0 0 10px var(--line);
+  filter: saturate(0.75);
   animation: sb-ghost-track 2.4s ease-in-out infinite;
 }
 .sb-track-line.same-ch .sb-track-tag {
-  opacity: 0.78;
+  opacity: 0.85;
   color: var(--line);
-  background: rgba(10, 6, 14, 0.55);
+  background: rgba(10, 6, 14, 0.65);
   border: 1px solid var(--line);
-  box-shadow: 0 0 8px rgba(255, 94, 200, 0.25);
 }
 .sb-track-line.same-ch .sb-track-tag .sb-cur-ch {
   background: rgba(255, 94, 200, 0.2);
   color: #ffe6f7;
 }
-/* Different channel → solid (not ghostly) */
 .sb-track-line.dim-ch {
-  opacity: 1;
-  border-style: solid;
+  opacity: 0.95;
   filter: none;
   animation: none;
 }
 @media (prefers-reduced-motion: reduce) {
-  .sb-track-line.same-ch { animation: none; opacity: 0.4; }
+  .sb-track-line.same-ch { animation: none; opacity: 0.45; }
 }
-/* Same-channel cursor also reads a bit ghostly */
 .sb-remote-cursor.same-ch {
   opacity: 0.55;
   filter: saturate(0.8);
@@ -1749,7 +1764,7 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
 
   // Native script load — Safari handles this much better than fetch+eval
   var s = document.createElement("script");
-  s.src = "chipbox-app.js?v=mp29";
+  s.src = "chipbox-app.js?v=mp30";
   s.async = false;
   s.onload = function () {
     setMsg("Engine loaded — starting…");
