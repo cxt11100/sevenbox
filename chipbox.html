@@ -451,8 +451,56 @@ body {
   overflow: hidden;
   box-sizing: border-box;
 }
-/* Hide legacy multiplayer mouse arrows (track marks only) */
-.sb-remote-cursor { display: none !important; }
+/* Simple multiplayer mouse cursor (other players only) */
+.sb-remote-cursor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 42;
+  --line: #ff5ec8;
+  transform: translate(-1px, -1px);
+}
+.sb-remote-cursor .sb-cur-arrow {
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 0 16px 12px;
+  border-color: transparent transparent transparent var(--line);
+  filter: drop-shadow(0 0 1px #000) drop-shadow(1px 1px 0 rgba(0,0,0,0.85));
+}
+.sb-remote-cursor .sb-cur-label {
+  position: absolute;
+  left: 14px;
+  top: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font: 800 10px/1.2 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #1a1020;
+  background: var(--line);
+  white-space: nowrap;
+  max-width: 110px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
+.sb-remote-cursor .sb-cur-label .sb-cur-name {
+  max-width: 64px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sb-remote-cursor .sb-cur-label .sb-cur-ch {
+  font: 800 9px/1 system-ui, sans-serif;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: rgba(0,0,0,0.22);
+  color: #fff;
+}
+.sb-remote-cursor.same-ch { opacity: 0.7; }
+.sb-remote-cursor.dim-ch { opacity: 0.95; }
 /*
  * Track mark = thin vertical pink line on THAT player's channel only.
  * Fixed at left of track grid (not glued to shared playhead / not following others).
@@ -1688,7 +1736,7 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
 
   // Native script load — Safari handles this much better than fetch+eval
   var s = document.createElement("script");
-  s.src = "chipbox-app.js?v=mp31";
+  s.src = "chipbox-app.js?v=mp32";
   s.async = false;
   s.onload = function () {
     setMsg("Engine loaded — starting…");

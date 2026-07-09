@@ -954,23 +954,26 @@ try {
         var y = (e.clientY - r.top) / r.height;
         var inside = x >= 0 && x <= 1 && y >= 0 && y <= 1;
         if (!inside) {
-          pointerState.inside = false;
+          if (pointerState.inside) {
+            pointerState.inside = false;
+            if (room) sendPresence(true);
+          }
           return;
         }
-        // Mouse pos kept local only — track marks use channel, not cursor spam
         pointerState.x = Math.max(0, Math.min(1, x));
         pointerState.y = Math.max(0, Math.min(1, y));
         pointerState.inside = true;
+        if (room) sendPresence(false);
       } catch (err) {}
     };
-    // lighter: no capture on every move across the whole document
+    // Editor box + document capture so joiners still get moves
     var box = document.getElementById("beepboxEditorContainer");
     if (box) {
       box.addEventListener("pointermove", upd, { passive: true });
       box.addEventListener("pointerdown", upd, { passive: true });
-    } else {
-      document.addEventListener("pointermove", upd, { capture: true, passive: true });
     }
+    document.addEventListener("pointermove", upd, { capture: true, passive: true });
+    document.addEventListener("pointerdown", upd, { capture: true, passive: true });
   }
 
   function ensureCursorEl(name, color) {
@@ -1153,9 +1156,13 @@ try {
     updateTrackLabel(trEl, name, chN, same);
   }
 
-  // Track marks only (~12 fps is plenty). No mouse arrows.
+  // Track marks ~12fps; cursors interpolate every frame when active
   var TRACK_TICK_MS = 80;
   var lastTrackTick = 0;
+
+  function easeOutQuad(u) {
+    return 1 - (1 - u) * (1 - u);
+  }
 
   function startCursorAnim() {
     if (cursorRaf) return;
@@ -1163,21 +1170,61 @@ try {
       cursorRaf = requestAnimationFrame(tick);
       if (!room) return;
       var now = nowStamp || (performance.now ? performance.now() : Date.now());
-      if (now - lastTrackTick < TRACK_TICK_MS) return;
-      lastTrackTick = now;
-
       ensureCursorLayer();
-      refreshTrackGeom(false);
+      var size = measureCursorLayer();
       var myCh = currentChannel();
       var myName = getName();
       var names = Object.keys(cursorTargets);
+      var doTrack = (now - lastTrackTick) >= TRACK_TICK_MS;
+      if (doTrack) {
+        lastTrackTick = now;
+        refreshTrackGeom(false);
+      }
+
       for (var i = 0; i < names.length; i++) {
         var name = names[i];
         var t = cursorTargets[name];
-        if (!t) continue;
-        // hide any leftover arrow nodes
-        if (t.el) t.el.style.display = "none";
-        placeTrackMark(t, name, myName, myCh);
+        if (!t || name === myName) continue;
+
+        if (doTrack) placeTrackMark(t, name, myName, myCh);
+
+        // Remote mouse cursor
+        var el = t.el || ensureCursorEl(name, t.color);
+        t.el = el;
+        if (!el) continue;
+        if (!t.inside || t.toX == null || t.toY == null || isNaN(t.toX) || isNaN(t.toY)) {
+          el.style.display = "none";
+          continue;
+        }
+        var elapsed = now - (t.segStart || now);
+        var u = elapsed / (t.segMs || CURSOR_SEG_MS);
+        var x, y;
+        if (u <= 1) {
+          var e = easeOutQuad(Math.max(0, Math.min(1, u)));
+          x = t.fromX + (t.toX - t.fromX) * e;
+          y = t.fromY + (t.toY - t.fromY) * e;
+        } else {
+          var coast = Math.min(CURSOR_COAST, u - 1);
+          x = t.toX + (t.toX - t.fromX) * coast * 0.25;
+          y = t.toY + (t.toY - t.fromY) * coast * 0.25;
+          x = Math.max(0, Math.min(1, x));
+          y = Math.max(0, Math.min(1, y));
+        }
+        t.dx = x;
+        t.dy = y;
+        el.style.display = "block";
+        el.style.left = (x * size.w) + "px";
+        el.style.top = (y * size.h) + "px";
+        var chN = (typeof t.channel === "number" && !isNaN(t.channel)) ? (t.channel | 0) : 0;
+        var same = chN === (myCh | 0);
+        if (same) {
+          el.classList.add("same-ch");
+          el.classList.remove("dim-ch");
+        } else {
+          el.classList.remove("same-ch");
+          el.classList.add("dim-ch");
+        }
+        updateTrackLabel(el, name, chN, same);
       }
     };
     cursorRaf = requestAnimationFrame(tick);
@@ -1224,6 +1271,7 @@ try {
     list = list || peers || [];
     var myName = getName();
     var live = {};
+    var now = performance.now ? performance.now() : Date.now();
 
     for (var i = 0; i < list.length; i++) {
       var p = list[i];
@@ -1232,6 +1280,11 @@ try {
       var color = peerColorFor(p.name, i);
       var pCh = (p.channel != null && p.channel !== "" && !isNaN(+p.channel)) ? (+p.channel | 0) : 0;
       if (pCh < 0) pCh = 0;
+      var hasX = p.x != null && p.x !== "" && !isNaN(+p.x);
+      var hasY = p.y != null && p.y !== "" && !isNaN(+p.y);
+      var nx = hasX ? +p.x : null;
+      var ny = hasY ? +p.y : null;
+      var inside = hasX && hasY ? (p.inside !== false) : false;
 
       var cur = cursorTargets[p.name];
       if (!cur) {
@@ -1239,16 +1292,41 @@ try {
           channel: pCh,
           color: color,
           trackEl: ensureTrackLineEl(p.name, color),
-          el: null,
-          lastCh: pCh
+          el: ensureCursorEl(p.name, color),
+          lastCh: pCh,
+          fromX: nx != null ? nx : 0.5,
+          fromY: ny != null ? ny : 0.5,
+          toX: nx != null ? nx : 0.5,
+          toY: ny != null ? ny : 0.5,
+          dx: nx != null ? nx : 0.5,
+          dy: ny != null ? ny : 0.5,
+          segStart: now,
+          segMs: 1,
+          inside: inside,
+          lastNx: nx,
+          lastNy: ny
         };
       } else {
-        // channel is per-player only — never copy someone else's track
         cur.channel = pCh;
         cur.color = color;
         cur.lastCh = pCh;
         if (!cur.trackEl) cur.trackEl = ensureTrackLineEl(p.name, color);
         else cur.trackEl.style.setProperty("--line", color);
+        if (!cur.el) cur.el = ensureCursorEl(p.name, color);
+        else {
+          cur.el.style.setProperty("--line", color);
+          cur.el.style.color = color;
+        }
+        if (hasX && hasY) {
+          cur.inside = p.inside !== false;
+          if (cur.lastNx !== nx || cur.lastNy !== ny) {
+            setCursorSample(cur, nx, ny, now);
+            cur.lastNx = nx;
+            cur.lastNy = ny;
+          }
+        } else if (p.inside === false) {
+          cur.inside = false;
+        }
       }
     }
     Object.keys(cursorTargets).forEach(function (name) {
@@ -1809,12 +1887,12 @@ try {
     } catch (e) {}
   }
 
-  // Cap cursor net traffic (~10 Hz). Smoother on free hosts than 15–60 Hz spam.
+  // ~10 Hz cursors; channel always included
   var lastPresenceSent = 0;
   var presenceFlushTimer = null;
-  // Channel marks only need ~4–5 Hz; high rates were lagging free hosts + phones
-  var PRESENCE_MIN_MS = 200;
+  var PRESENCE_MIN_MS = 100;
   var lastSentChannel = -999;
+  var lastSentXY = { x: -1, y: -1 };
 
   function sendPresence(force) {
     if (!room) return;
@@ -1834,24 +1912,29 @@ try {
     }
     var ch = currentChannel() | 0;
     var bar = currentBar() | 0;
-    // Skip if nothing meaningful changed (channel is what track marks need)
-    if (!force && ch === lastSentChannel && (now - lastPresenceSent) < 900) {
-      var key0 = ch + ":" + bar;
-      if (key0 === lastPresenceKey) return;
+    var x = Math.round(pointerState.x * 1000) / 1000;
+    var y = Math.round(pointerState.y * 1000) / 1000;
+    var inside = !!pointerState.inside;
+    // skip tiny mouse noise when channel unchanged
+    if (!force && ch === lastSentChannel && lastSentXY.x >= 0) {
+      var md = Math.abs(x - lastSentXY.x) + Math.abs(y - lastSentXY.y);
+      if (md < 0.006 && inside && (now - lastPresenceSent) < 450) return;
     }
-    var key = ch + ":" + bar;
-    if (!force && key === lastPresenceKey && (now - lastPresenceSent) < 1200) return;
+    var key = x + "," + y + "," + (inside ? 1 : 0) + "," + ch + "," + bar;
+    if (!force && key === lastPresenceKey && (now - lastPresenceSent) < 800) return;
     lastPresenceKey = key;
     lastPresenceSent = now;
     lastSentChannel = ch;
+    lastSentXY.x = x;
+    lastSentXY.y = y;
     var payload = {
       type: "presence",
       name: getName(),
       channel: ch,
       bar: bar,
-      x: null,
-      y: null,
-      inside: false,
+      x: x,
+      y: y,
+      inside: inside,
       room: room,
       tabId: tabId,
       ts: now
