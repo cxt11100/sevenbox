@@ -1,29 +1,62 @@
 #!/usr/bin/env python3
 """
-SevenBox multiplayer server v3
+SevenBox multiplayer server v4
 - Public/private rooms with titles
 - Live lobby list for public servers
 - Edit/view roles, presence, song sync
+- Online-tuned: throttled cursors, light heartbeats, LWW song state
 """
 
 from __future__ import annotations
 
 import argparse
-import os
 import asyncio
 import gzip
 import json
+import logging
 import mimetypes
+import os
 import random
-import string
 import sys
 import time
+import zlib
 from pathlib import Path
 from typing import Any
 
 from websockets.asyncio.server import ServerConnection, serve
 from websockets.datastructures import Headers
+from websockets.exceptions import ConnectionClosed, InvalidMessage
 from websockets.http11 import Request, Response
+
+
+def _quiet_websockets_noise() -> None:
+    """
+    Render/health scanners/bots often open the port without a full HTTP request.
+    websockets logs that as InvalidMessage — harmless, but noisy in logs.
+    """
+    class _DropNoise(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:  # noqa: A003
+            try:
+                msg = record.getMessage()
+            except Exception:
+                return True
+            junk = (
+                "did not receive a valid HTTP request",
+                "opening handshake failed",
+                "connection closed while reading HTTP request",
+                "InvalidMessage",
+            )
+            return not any(j in msg for j in junk)
+
+    for name in ("websockets", "websockets.server", "websockets.asyncio.server"):
+        log = logging.getLogger(name)
+        log.addFilter(_DropNoise())
+        # keep real errors; filter handles the spam lines
+        if log.level == logging.NOTSET:
+            log.setLevel(logging.INFO)
+
+
+_quiet_websockets_noise()
 
 ROOT = Path(__file__).resolve().parent.parent
 STATIC = ROOT
@@ -31,6 +64,25 @@ STATIC = ROOT
 CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 CODE_LEN = 5
 SEVEN_KEY = "309761!"
+MAX_SONG_CHARS = 1_500_000  # ~1.5MB base64 song cap
+ALLOWED_THEMES = {
+    "default",
+    "purple_gold",
+    "midnight",
+    "matrix",
+    "crimson",
+    "ocean",
+    "sunset",
+    "ice",
+}
+# Site-wide look (everyone sees this) — only seven can change
+SITE: dict[str, Any] = {
+    "theme": "default",
+    "announce": "",
+    "announce_ts": 0,
+}
+# Golden banner is temporary (ms). After this, new joins won't see it either.
+ANNOUNCE_TTL_MS = 12_000
 BLOCKED_NAMES = {
     "admin", "administrator", "host", "owner", "root", "mod", "moderator",
     "sysadmin", "system", "staff", "op", "operator", "superuser", "sudo",
@@ -43,9 +95,37 @@ def normalize_name(n: str) -> str:
     return " ".join(str(n or "").strip().split())[:24]
 
 
+RANDOM_TITLES = (
+    "late night jam",
+    "chip soup",
+    "beep zone",
+    "pixel loft",
+    "8-bit attic",
+    "synth kitchen",
+    "noise closet",
+    "loop station",
+    "midnight grid",
+    "cassette club",
+    "pulse room",
+    "hex jam",
+    "square wave cafe",
+    "arcade after dark",
+    "tiny stadium",
+    "floppy disk party",
+    "retro rocket",
+    "glitch garden",
+    "coin sound lab",
+    "bass bunker",
+)
+
+
+def random_room_title() -> str:
+    return random.choice(RANDOM_TITLES)
+
+
 def normalize_title(t: str) -> str:
     t = " ".join(str(t or "").strip().split())[:40]
-    return t or "Untitled jam"
+    return t or random_room_title()
 
 
 def is_seven_name(n: str) -> bool:
@@ -66,7 +146,6 @@ def validate_player_name(n: str, key: str | None = None) -> tuple[bool, str]:
     compact = "".join(ch for ch in low if ch.isalnum())
     if low in BLOCKED_NAMES or compact in BLOCKED_NAMES:
         return False, "That name sounds like staff/power. Pick another."
-    # Longer power phrases as substrings only (avoid blocking "HostGuy" via "host")
     for bit in ("administrator", "moderator", "sysadmin", "superuser", "sysop"):
         if bit in compact:
             return False, "That name sounds like staff/power. Pick another."
@@ -75,6 +154,12 @@ def validate_player_name(n: str, key: str | None = None) -> tuple[bool, str]:
 
 def normalize_code(raw: Any) -> str:
     return str(raw or "").strip().upper().replace(" ", "")
+
+
+def song_sig(song: str) -> int:
+    if not song:
+        return 0
+    return zlib.crc32(song.encode("utf-8", errors="ignore")) & 0xFFFFFFFF
 
 
 class Room:
@@ -90,6 +175,7 @@ class Room:
         self.host = host
         self.clients: set[ServerConnection] = set()
         self.song: str = ""
+        self.song_ts: int = 0
         self.names: dict[ServerConnection, str] = {}
         self.roles: dict[ServerConnection, str] = {}
         self.presence: dict[ServerConnection, dict[str, Any]] = {}
@@ -97,21 +183,45 @@ class Room:
         self.title = title
         self.public = public
         self.created = time.time()
-        self.last_transport: dict[str, Any] = {"playing": False, "bar": 0, "playhead": 0.0}
+        self.last_transport: dict[str, Any] = {
+            "playing": False,
+            "bar": 0,
+            "playhead": 0.0,
+        }
+        self._presence_dirty = False
+        self._presence_flush_task: asyncio.Task | None = None
+        self._hb_tick = 0
 
     def peer_list(self) -> list[dict[str, Any]]:
         out = []
         for c in self.clients:
             p = self.presence.get(c) or {}
+            x = p.get("x")
+            y = p.get("y")
+            # if we have coords, treat as inside unless explicitly false
+            if "inside" in p:
+                inside = bool(p.get("inside"))
+            else:
+                inside = x is not None and y is not None
+            try:
+                ch = int(p.get("channel", 0) or 0)
+            except (TypeError, ValueError):
+                ch = 0
+            if ch < 0:
+                ch = 0
+            try:
+                bar = int(p.get("bar", 0) or 0)
+            except (TypeError, ValueError):
+                bar = 0
             out.append(
                 {
                     "name": self.names.get(c, "player"),
                     "role": self.roles.get(c, "edit"),
-                    "channel": p.get("channel", 0),
-                    "bar": p.get("bar", 0),
-                    "x": p.get("x"),
-                    "y": p.get("y"),
-                    "inside": p.get("inside", False),
+                    "channel": ch,
+                    "bar": bar,
+                    "x": x,
+                    "y": y,
+                    "inside": inside,
                     "isHost": c is self.host,
                 }
             )
@@ -132,6 +242,68 @@ class Room:
 rooms: dict[str, Room] = {}
 client_room: dict[ServerConnection, str] = {}
 all_clients: set[ServerConnection] = set()
+
+
+def active_announce() -> tuple[str, int]:
+    """Return (text, ts) only while the banner is still within TTL; else clear."""
+    text = str(SITE.get("announce") or "")
+    ts = int(SITE.get("announce_ts") or 0)
+    if not text or not ts:
+        return "", 0
+    age = int(time.time() * 1000) - ts
+    if age > ANNOUNCE_TTL_MS:
+        SITE["announce"] = ""
+        SITE["announce_ts"] = 0
+        return "", 0
+    return text, ts
+
+
+def presence_stats() -> dict[str, Any]:
+    """How many people are connected / in rooms right now."""
+    in_rooms = sum(len(r.clients) for r in rooms.values())
+    ann, ann_ts = active_announce()
+    return {
+        "type": "stats",
+        "online": len(all_clients),
+        "inRooms": in_rooms,
+        "rooms": len(rooms),
+        "public": len([r for r in rooms.values() if r.public]),
+        "lobby": public_lobby(),
+        "theme": SITE["theme"],
+        "announce": ann,
+        "announceTs": ann_ts,
+    }
+
+
+def is_seven_admin(msg: dict[str, Any]) -> bool:
+    """Owner commands require name seven + the special key (server-side)."""
+    name = normalize_name(str(msg.get("name") or ""))
+    key = str(msg.get("nameKey") or "")
+    return is_seven_name(name) and key == SEVEN_KEY
+
+
+def all_rooms_admin() -> list[dict[str, Any]]:
+    out = []
+    for r in rooms.values():
+        out.append(
+            {
+                "code": r.code,
+                "title": r.title,
+                "public": r.public,
+                "host": r.names.get(r.host, "host"),
+                "count": len(r.clients),
+                "defaultRole": r.default_role,
+                "peers": r.peer_list(),
+            }
+        )
+    out.sort(key=lambda e: (-e["count"], e["code"]))
+    return out
+
+
+async def force_leave_client(ws: ServerConnection, reason: str = "removed") -> None:
+    await leave(ws)  # already broadcasts lobby when needed
+    await send(ws, {"type": "kicked", "reason": reason})
+    await send(ws, {"type": "left"})
 
 
 def new_code() -> str:
@@ -171,8 +343,56 @@ async def broadcast_room(
         await leave(c)
 
 
+async def flush_presence(room: Room) -> None:
+    """~16 Hz max presence broadcast — smoother remote cursor paths."""
+    try:
+        await asyncio.sleep(0.06)
+        if room.code not in rooms or rooms.get(room.code) is not room:
+            return
+        if not room._presence_dirty:
+            return
+        room._presence_dirty = False
+        await broadcast_room(
+            room,
+            {
+                "type": "presence",
+                "peers": room.peer_list(),
+                "count": len(room.clients),
+                "title": room.title,
+                "public": room.public,
+            },
+        )
+    except Exception:
+        pass
+    finally:
+        room._presence_flush_task = None
+        if room._presence_dirty and room.code in rooms and rooms.get(room.code) is room:
+            room._presence_flush_task = asyncio.create_task(flush_presence(room))
+
+
+def schedule_presence_broadcast(room: Room) -> None:
+    room._presence_dirty = True
+    if room._presence_flush_task is None or room._presence_flush_task.done():
+        room._presence_flush_task = asyncio.create_task(flush_presence(room))
+
+
 async def broadcast_lobby() -> None:
     payload = {"type": "lobby", "servers": public_lobby()}
+    raw = json.dumps(payload, separators=(",", ":"))
+    dead: list[ServerConnection] = []
+    for c in list(all_clients):
+        try:
+            await c.send(raw)
+        except Exception:
+            dead.append(c)
+    for c in dead:
+        all_clients.discard(c)
+        await leave(c)
+    await broadcast_stats()
+
+
+async def broadcast_stats() -> None:
+    payload = presence_stats()
     raw = json.dumps(payload, separators=(",", ":"))
     dead: list[ServerConnection] = []
     for c in list(all_clients):
@@ -202,9 +422,11 @@ async def leave(ws: ServerConnection) -> None:
         await broadcast_lobby()
         return
 
+    promoted = None
     if room.host is ws:
         room.host = next(iter(room.clients))
         room.roles[room.host] = "host"
+        promoted = room.host
 
     await broadcast_room(
         room,
@@ -218,13 +440,55 @@ async def leave(ws: ServerConnection) -> None:
             "public": room.public,
         },
     )
+    # New host must unlock host controls immediately (not stay stuck as edit)
+    if promoted is not None:
+        await send(
+            promoted,
+            {
+                "type": "your_role",
+                "role": "host",
+                "defaultRole": room.default_role,
+                "peers": room.peer_list(),
+                "host": room.names.get(room.host, "host"),
+            },
+        )
     await broadcast_lobby()
 
 
 async def ws_handler(ws: ServerConnection) -> None:
     all_clients.add(ws)
-    await send(ws, {"type": "hello", "app": "SevenBox", "v": 3})
-    await send(ws, {"type": "lobby", "servers": public_lobby()})
+    stats = presence_stats()
+    ann, ann_ts = active_announce()
+    try:
+        await send(
+            ws,
+            {
+                "type": "hello",
+                "app": "SevenBox",
+                "v": 6,
+                "online": stats["online"],
+                "inRooms": stats["inRooms"],
+                "rooms": stats["rooms"],
+                "public": stats["public"],
+                "theme": SITE["theme"],
+                "announce": ann,
+                "announceTs": ann_ts,
+            },
+        )
+        await send(ws, {"type": "lobby", "servers": public_lobby()})
+        await send(
+            ws,
+            {
+                "type": "site_theme",
+                "theme": SITE["theme"],
+                "announce": ann,
+                "announceTs": ann_ts,
+            },
+        )
+        await broadcast_stats()
+    except (ConnectionClosed, InvalidMessage, OSError):
+        all_clients.discard(ws)
+        return
     try:
         async for raw in ws:
             try:
@@ -236,6 +500,10 @@ async def ws_handler(ws: ServerConnection) -> None:
 
             if mtype == "lobby" or mtype == "list_rooms":
                 await send(ws, {"type": "lobby", "servers": public_lobby()})
+                await send(ws, presence_stats())
+
+            elif mtype == "stats":
+                await send(ws, presence_stats())
 
             elif mtype == "create":
                 await leave(ws)
@@ -246,7 +514,9 @@ async def ws_handler(ws: ServerConnection) -> None:
                     await send(ws, {"type": "error", "message": name_or_err})
                     continue
                 name = name_or_err
-                title = normalize_title(str(msg.get("title") or f"{name}'s jam"))
+                # blank title → random fun name (not just "Untitled")
+                raw_title = " ".join(str(msg.get("title") or "").strip().split())
+                title = normalize_title(raw_title) if raw_title else random_room_title()
                 public = bool(msg.get("public", True))
                 role_default = str(msg.get("defaultRole") or "edit").lower()
                 if role_default not in ("edit", "view"):
@@ -258,12 +528,27 @@ async def ws_handler(ws: ServerConnection) -> None:
                 room.clients.add(ws)
                 room.names[ws] = name
                 room.roles[ws] = "host"
+                try:
+                    ch0 = int(msg.get("channel") if msg.get("channel") is not None else 0)
+                except (TypeError, ValueError):
+                    ch0 = 0
+                try:
+                    bar0 = int(msg.get("bar") if msg.get("bar") is not None else 0)
+                except (TypeError, ValueError):
+                    bar0 = 0
+                if ch0 < 0:
+                    ch0 = 0
+                if bar0 < 0:
+                    bar0 = 0
                 room.presence[ws] = {
-                    "channel": int(msg.get("channel") or 0),
-                    "bar": int(msg.get("bar") or 0),
+                    "channel": ch0,
+                    "bar": bar0,
                 }
                 if msg.get("song"):
-                    room.song = str(msg["song"])
+                    song = str(msg["song"])
+                    if len(song) <= MAX_SONG_CHARS:
+                        room.song = song
+                        room.song_ts = int(msg.get("ts") or time.time() * 1000)
                 rooms[code] = room
                 client_room[ws] = code
                 await send(
@@ -279,6 +564,7 @@ async def ws_handler(ws: ServerConnection) -> None:
                         "peers": room.peer_list(),
                         "song": room.song,
                         "transport": room.last_transport,
+                        "ts": room.song_ts,
                     },
                 )
                 await broadcast_lobby()
@@ -291,7 +577,10 @@ async def ws_handler(ws: ServerConnection) -> None:
                         ws,
                         {
                             "type": "error",
-                            "message": f"Room {code or '?'} not found. It may be private, closed, or you're on a different link.",
+                            "message": (
+                                f"Room {code or '?'} not found. "
+                                "It may be private, closed, or you're on a different link."
+                            ),
                         },
                     )
                     continue
@@ -312,9 +601,21 @@ async def ws_handler(ws: ServerConnection) -> None:
                 room.clients.add(ws)
                 room.names[ws] = name
                 room.roles[ws] = room.default_role
+                try:
+                    chj = int(msg.get("channel") if msg.get("channel") is not None else 0)
+                except (TypeError, ValueError):
+                    chj = 0
+                try:
+                    barj = int(msg.get("bar") if msg.get("bar") is not None else 0)
+                except (TypeError, ValueError):
+                    barj = 0
+                if chj < 0:
+                    chj = 0
+                if barj < 0:
+                    barj = 0
                 room.presence[ws] = {
-                    "channel": int(msg.get("channel") or 0),
-                    "bar": int(msg.get("bar") or 0),
+                    "channel": chj,
+                    "bar": barj,
                 }
                 client_room[ws] = code
                 await send(
@@ -332,6 +633,7 @@ async def ws_handler(ws: ServerConnection) -> None:
                         "host": room.names.get(room.host, "host"),
                         "you": name,
                         "transport": room.last_transport,
+                        "ts": room.song_ts,
                     },
                 )
                 await broadcast_room(
@@ -366,13 +668,21 @@ async def ws_handler(ws: ServerConnection) -> None:
                             "song": room.song,
                             "from": "server",
                             "readonly": True,
+                            "ts": room.song_ts,
                         },
                     )
                     continue
                 song = str(msg.get("song") or "")
-                if not song:
+                if not song or len(song) > MAX_SONG_CHARS:
+                    continue
+                ts = int(msg.get("ts") or 0)
+                # Last-write-wins: drop stale packets (fixes note flicker over lag)
+                if ts and room.song_ts and ts < room.song_ts:
+                    continue
+                if song == room.song and ts and ts <= room.song_ts:
                     continue
                 room.song = song
+                room.song_ts = ts or int(time.time() * 1000)
                 await broadcast_room(
                     room,
                     {
@@ -380,14 +690,14 @@ async def ws_handler(ws: ServerConnection) -> None:
                         "song": song,
                         "from": room.names.get(ws, "player"),
                         "role": role,
-                        "ts": int(msg.get("ts") or time.time() * 1000),
+                        "ts": room.song_ts,
                         "seq": int(msg.get("seq") or 0),
+                        "sig": song_sig(song),
                     },
                     skip=ws,
                 )
 
             elif mtype == "transport":
-                # play/stop/playhead — editors only; not local UI prefs
                 code = client_room.get(ws)
                 if not code:
                     continue
@@ -397,6 +707,8 @@ async def ws_handler(ws: ServerConnection) -> None:
                 role = room.roles.get(ws, "view")
                 if role == "view":
                     continue
+                restart = bool(msg.get("restart") or msg.get("snap"))
+                # Never persist restart on last_transport — heartbeats would re-fire it forever
                 room.last_transport = {
                     "playing": bool(msg.get("playing")),
                     "bar": int(msg.get("bar") or 0),
@@ -409,7 +721,9 @@ async def ws_handler(ws: ServerConnection) -> None:
                         "playing": room.last_transport["playing"],
                         "bar": room.last_transport["bar"],
                         "playhead": room.last_transport["playhead"],
+                        "restart": restart,
                         "from": room.names.get(ws, "player"),
+                        "ts": int(msg.get("ts") or time.time() * 1000),
                     },
                     skip=ws,
                 )
@@ -418,7 +732,9 @@ async def ws_handler(ws: ServerConnection) -> None:
                 code = client_room.get(ws)
                 room = rooms.get(code) if code else None
                 if not room or room.host is not ws:
-                    await send(ws, {"type": "error", "message": "only host can change permissions"})
+                    await send(
+                        ws, {"type": "error", "message": "only host can change permissions"}
+                    )
                     continue
                 role = str(msg.get("defaultRole") or "edit").lower()
                 if role not in ("edit", "view"):
@@ -460,28 +776,32 @@ async def ws_handler(ws: ServerConnection) -> None:
                 room = rooms.get(code) if code else None
                 if not room:
                     continue
+                try:
+                    ch = int(msg.get("channel") if msg.get("channel") is not None else 0)
+                except (TypeError, ValueError):
+                    ch = 0
+                if ch < 0:
+                    ch = 0
+                if ch > 64:
+                    ch = 64
+                try:
+                    bar = int(msg.get("bar") if msg.get("bar") is not None else 0)
+                except (TypeError, ValueError):
+                    bar = 0
                 room.presence[ws] = {
-                    "channel": int(msg.get("channel") or 0),
-                    "bar": int(msg.get("bar") or 0),
+                    "channel": ch,
+                    "bar": bar,
                     "x": float(msg["x"]) if msg.get("x") is not None else None,
                     "y": float(msg["y"]) if msg.get("y") is not None else None,
                     "inside": bool(msg.get("inside")),
                 }
                 if msg.get("name"):
-                    room.names[ws] = str(msg.get("name"))[:24]
-                await broadcast_room(
-                    room,
-                    {
-                        "type": "presence",
-                        "peers": room.peer_list(),
-                        "count": len(room.clients),
-                        "title": room.title,
-                        "public": room.public,
-                    },
-                )
+                    # only update display name if already in room (don't hijack)
+                    if ws in room.names:
+                        room.names[ws] = str(msg.get("name"))[:24]
+                schedule_presence_broadcast(room)
 
             elif mtype == "request_sync":
-                # Client woke from iOS throttle — push full authority state now
                 code = client_room.get(ws)
                 room = rooms.get(code) if code else None
                 if not room:
@@ -499,7 +819,8 @@ async def ws_handler(ws: ServerConnection) -> None:
                         "public": room.public,
                         "defaultRole": room.default_role,
                         "role": room.roles.get(ws, "view"),
-                        "ts": int(time.time() * 1000),
+                        "ts": room.song_ts or int(time.time() * 1000),
+                        "sig": song_sig(room.song),
                     },
                 )
 
@@ -511,12 +832,223 @@ async def ws_handler(ws: ServerConnection) -> None:
                 await send(ws, {"type": "left"})
                 await broadcast_lobby()
 
+            # ── Owner (seven) admin ──────────────────────────────────────
+            elif mtype == "admin_list":
+                if not is_seven_admin(msg):
+                    await send(ws, {"type": "error", "message": "owner only"})
+                    continue
+                await send(
+                    ws,
+                    {
+                        "type": "admin_list",
+                        "rooms": all_rooms_admin(),
+                        "online": len(all_clients),
+                        "theme": SITE["theme"],
+                        "announce": active_announce()[0],
+                    },
+                )
+
+            elif mtype == "admin_kick":
+                if not is_seven_admin(msg):
+                    await send(ws, {"type": "error", "message": "owner only"})
+                    continue
+                target = normalize_name(str(msg.get("target") or ""))
+                room_code = normalize_code(msg.get("room") or "")
+                if not target:
+                    await send(ws, {"type": "error", "message": "pick someone to kick"})
+                    continue
+                reason = str(msg.get("reason") or "Removed by seven")[:80]
+                kicked = 0
+                for room in list(rooms.values()):
+                    if room_code and room.code != room_code:
+                        continue
+                    for c in list(room.clients):
+                        if normalize_name(room.names.get(c, "")) == target:
+                            # never kick yourself by name match in same session unless explicit
+                            await force_leave_client(c, reason)
+                            kicked += 1
+                if kicked:
+                    await send(
+                        ws,
+                        {
+                            "type": "admin_ok",
+                            "action": "kick",
+                            "target": target,
+                            "kicked": kicked,
+                            "message": f"Kicked {target} ({kicked})",
+                        },
+                    )
+                    await broadcast_stats()
+                else:
+                    await send(ws, {"type": "error", "message": f"No player named {target}"})
+
+            elif mtype == "admin_close_room":
+                if not is_seven_admin(msg):
+                    await send(ws, {"type": "error", "message": "owner only"})
+                    continue
+                code = normalize_code(msg.get("room") or "")
+                room = rooms.get(code)
+                if not room:
+                    await send(ws, {"type": "error", "message": "room not found"})
+                    continue
+                reason = str(msg.get("reason") or "Room closed by seven")[:80]
+                for c in list(room.clients):
+                    await force_leave_client(c, reason)
+                await send(
+                    ws,
+                    {
+                        "type": "admin_ok",
+                        "action": "close_room",
+                        "room": code,
+                        "message": f"Closed room {code}",
+                    },
+                )
+                await broadcast_stats()
+
+            elif mtype == "admin_set_theme":
+                if not is_seven_admin(msg):
+                    await send(ws, {"type": "error", "message": "owner only"})
+                    continue
+                theme = str(msg.get("theme") or "default").strip().lower().replace("-", "_")
+                if theme not in ALLOWED_THEMES:
+                    await send(
+                        ws,
+                        {
+                            "type": "error",
+                            "message": "bad theme — " + ", ".join(sorted(ALLOWED_THEMES)),
+                        },
+                    )
+                    continue
+                SITE["theme"] = theme
+                ann, ann_ts = active_announce()
+                payload = {
+                    "type": "site_theme",
+                    "theme": SITE["theme"],
+                    "announce": ann,
+                    "announceTs": ann_ts,
+                    "from": "seven",
+                }
+                raw = json.dumps(payload, separators=(",", ":"))
+                for c in list(all_clients):
+                    try:
+                        await c.send(raw)
+                    except Exception:
+                        pass
+                await send(
+                    ws,
+                    {
+                        "type": "admin_ok",
+                        "action": "theme",
+                        "theme": SITE["theme"],
+                        "message": f"Theme → {SITE['theme']} (everyone)",
+                    },
+                )
+
+            elif mtype == "admin_announce":
+                if not is_seven_admin(msg):
+                    await send(ws, {"type": "error", "message": "owner only"})
+                    continue
+                text = " ".join(str(msg.get("text") or "").strip().split())[:160]
+                SITE["announce"] = text
+                SITE["announce_ts"] = int(time.time() * 1000) if text else 0
+                payload = {
+                    "type": "announce",
+                    "text": text,
+                    "ts": SITE["announce_ts"],
+                    "ttlMs": ANNOUNCE_TTL_MS if text else 0,
+                    "from": "seven",
+                }
+                raw = json.dumps(payload, separators=(",", ":"))
+                for c in list(all_clients):
+                    try:
+                        await c.send(raw)
+                    except Exception:
+                        pass
+                await send(
+                    ws,
+                    {
+                        "type": "admin_ok",
+                        "action": "announce",
+                        "message": (
+                            f"Announcement sent ({ANNOUNCE_TTL_MS // 1000}s)"
+                            if text
+                            else "Announcement cleared"
+                        ),
+                    },
+                )
+                # auto-clear stored banner so it doesn't stick forever
+                if text:
+                    async def _expire_announce(expected_ts: int) -> None:
+                        await asyncio.sleep(ANNOUNCE_TTL_MS / 1000.0)
+                        if SITE.get("announce_ts") == expected_ts:
+                            SITE["announce"] = ""
+                            SITE["announce_ts"] = 0
+
+                    asyncio.create_task(_expire_announce(SITE["announce_ts"]))
+
+            elif mtype == "admin_set_role":
+                # Force someone's role in a room (edit/view)
+                if not is_seven_admin(msg):
+                    await send(ws, {"type": "error", "message": "owner only"})
+                    continue
+                code = normalize_code(msg.get("room") or "")
+                target = normalize_name(str(msg.get("target") or ""))
+                role = str(msg.get("role") or "view").lower()
+                if role not in ("edit", "view"):
+                    await send(ws, {"type": "error", "message": "role must be edit or view"})
+                    continue
+                room = rooms.get(code)
+                if not room or not target:
+                    await send(ws, {"type": "error", "message": "room/target required"})
+                    continue
+                found = None
+                for c in room.clients:
+                    if normalize_name(room.names.get(c, "")) == target:
+                        found = c
+                        break
+                if not found:
+                    await send(ws, {"type": "error", "message": "player not in that room"})
+                    continue
+                if found is room.host:
+                    await send(ws, {"type": "error", "message": "can't demote room host this way"})
+                    continue
+                room.roles[found] = role
+                await send(found, {"type": "your_role", "role": role, "defaultRole": room.default_role})
+                await broadcast_room(
+                    room,
+                    {
+                        "type": "peers",
+                        "count": len(room.clients),
+                        "peers": room.peer_list(),
+                        "defaultRole": room.default_role,
+                        "host": room.names.get(room.host, "host"),
+                        "title": room.title,
+                        "public": room.public,
+                    },
+                )
+                await send(
+                    ws,
+                    {
+                        "type": "admin_ok",
+                        "action": "set_role",
+                        "message": f"{target} → {role} in {code}",
+                    },
+                )
+
             else:
                 await send(ws, {"type": "error", "message": "unknown type"})
+    except (ConnectionClosed, InvalidMessage, OSError):
+        # client navigated away / flaky network — normal
+        pass
+    except Exception as e:
+        # don't crash the whole process for one bad client
+        print(f"ws_handler client error: {type(e).__name__}: {e}", file=sys.stderr)
     finally:
         all_clients.discard(ws)
-        await leave(ws)
-        await broadcast_lobby()
+        try:
+            await leave(ws)
+        except Exception:
+            pass
 
 
 def safe_path(url_path: str) -> Path | None:
@@ -541,25 +1073,72 @@ def safe_path(url_path: str) -> Path | None:
 
 async def process_request(connection: ServerConnection, request: Request) -> Response | None:
     path = request.path or "/"
+    method = ""
+    try:
+        method = (request.method or "GET").upper()
+    except Exception:
+        method = "GET"
+
+    # WebSocket upgrade path only
     if path == "/ws" or path.startswith("/ws?"):
         return None
 
-    if path == "/health":
+    # Health / probes (Render, bots, uptime checkers)
+    if path in ("/health", "/healthz", "/ready", "/ping"):
+        st = presence_stats()
         body = json.dumps(
             {
                 "ok": True,
                 "app": "SevenBox",
-                "v": 3,
-                "rooms": len(rooms),
-                "public": len([r for r in rooms.values() if r.public]),
+                "v": 6,
+                "online": st["online"],
+                "inRooms": st["inRooms"],
+                "rooms": st["rooms"],
+                "public": st["public"],
+                "theme": SITE["theme"],
                 "lobby": public_lobby(),
             }
         ).encode()
-        return Response(200, "OK", Headers([("Content-Type", "application/json")]), body)
+        headers = Headers(
+            [
+                ("Content-Type", "application/json"),
+                ("Cache-Control", "no-store"),
+                ("Access-Control-Allow-Origin", "*"),
+            ]
+        )
+        if method == "HEAD":
+            return Response(200, "OK", headers, b"")
+        return Response(200, "OK", headers, body)
+
+    # CORS preflight
+    if method == "OPTIONS":
+        return Response(
+            204,
+            "No Content",
+            Headers(
+                [
+                    ("Access-Control-Allow-Origin", "*"),
+                    ("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS"),
+                    ("Access-Control-Allow-Headers", "*"),
+                    ("Access-Control-Max-Age", "86400"),
+                ]
+            ),
+            b"",
+        )
+
+    if method not in ("GET", "HEAD"):
+        return Response(
+            405,
+            "Method Not Allowed",
+            Headers([("Content-Type", "text/plain"), ("Allow", "GET, HEAD, OPTIONS")]),
+            b"Method not allowed",
+        )
 
     file_path = safe_path(path)
     if file_path is None:
-        return Response(404, "Not Found", Headers([("Content-Type", "text/plain")]), b"Not found")
+        return Response(
+            404, "Not Found", Headers([("Content-Type", "text/plain")]), b"Not found"
+        )
 
     data = file_path.read_bytes()
     ctype = mimetypes.guess_type(str(file_path))[0] or "application/octet-stream"
@@ -569,43 +1148,81 @@ async def process_request(connection: ServerConnection, request: Request) -> Res
         ctype = "application/javascript; charset=utf-8"
     elif file_path.suffix == ".css":
         ctype = "text/css; charset=utf-8"
+    elif file_path.suffix == ".wav":
+        ctype = "audio/wav"
 
     accept = ""
     try:
         accept = request.headers.get("Accept-Encoding", "") or ""
     except Exception:
         pass
+
+    # HTML/JS always revalidate so deploy fixes show up; static media can cache briefly
+    if file_path.suffix in (".html", ".js"):
+        cache = "no-cache, must-revalidate"
+    elif file_path.suffix in (".wav", ".png", ".jpg", ".ico", ".svg"):
+        cache = "public, max-age=3600"
+    else:
+        cache = "no-cache"
+
     header_list = [
         ("Content-Type", ctype),
-        ("Cache-Control", "no-cache"),
+        ("Cache-Control", cache),
         ("Access-Control-Allow-Origin", "*"),
+        ("X-Content-Type-Options", "nosniff"),
     ]
-    if "gzip" in accept.lower() and len(data) > 1500:
-        data = gzip.compress(data, compresslevel=6)
+    if method == "HEAD":
+        return Response(200, "OK", Headers(header_list), b"")
+
+    if "gzip" in accept.lower() and len(data) > 1500 and file_path.suffix != ".wav":
+        data = gzip.compress(data, compresslevel=5)
         header_list.append(("Content-Encoding", "gzip"))
         header_list.append(("Vary", "Accept-Encoding"))
     return Response(200, "OK", Headers(header_list), data)
 
 
-
 async def room_heartbeat_loop() -> None:
-    """Push full room state often so idle iPhones catch up when their JS wakes."""
+    """Light keep-alive. Full song only every ~12s (not every tick) to cut lag/glitch."""
+    tick = 0
     while True:
-        await asyncio.sleep(1.5)
+        await asyncio.sleep(3.0)
+        tick += 1
+        if tick % 2 == 0:
+            try:
+                await broadcast_stats()
+            except Exception:
+                pass
         now = int(time.time() * 1000)
         for room in list(rooms.values()):
             if not room.clients:
                 continue
-            payload = {
+            room._hb_tick = getattr(room, "_hb_tick", 0) + 1
+            payload: dict[str, Any] = {
                 "type": "heartbeat",
-                "song": room.song,
-                "transport": getattr(room, "last_transport", {"playing": False, "bar": 0, "playhead": 0.0}),
+                "transport": getattr(
+                    room,
+                    "last_transport",
+                    {"playing": False, "bar": 0, "playhead": 0.0},
+                ),
                 "ts": now,
-                "peers": room.peer_list(),
                 "count": len(room.clients),
                 "title": room.title,
                 "code": room.code,
+                "sig": song_sig(room.song),
+                "songLen": len(room.song or ""),
             }
+            # Full song recovery rarely (~30s) — frequent pushes caused playhead jumps
+            if room._hb_tick % 10 == 0 and room.song:
+                payload["song"] = room.song
+                payload["songTs"] = room.song_ts
+            # Never include restart flags in heartbeat transport
+            tr = payload.get("transport") or {}
+            if isinstance(tr, dict) and tr.get("restart"):
+                payload["transport"] = {
+                    "playing": bool(tr.get("playing")),
+                    "bar": int(tr.get("bar") or 0),
+                    "playhead": float(tr.get("playhead") or 0),
+                }
             raw = json.dumps(payload, separators=(",", ":"))
             dead = []
             for c in list(room.clients):
@@ -618,22 +1235,47 @@ async def room_heartbeat_loop() -> None:
 
 
 async def main_async(host: str, port: int) -> None:
-    print("SevenBox multiplayer v3 — public lobby")
-    print(f"  Open: http://127.0.0.1:{port}/chipbox.html")
-    async with serve(ws_handler, host, port, process_request=process_request):
+    # Flush immediately so Render sees "listening" logs during port scan
+    def log(msg: str) -> None:
+        print(msg, flush=True)
+
+    log("SevenBox multiplayer v6 — owner admin + site themes")
+    log(f"  Binding: {host}:{port}")
+    log(f"  Open:    http://127.0.0.1:{port}/chipbox.html")
+    log(f"  WS:      ws://127.0.0.1:{port}/ws")
+    log(f"  Health:  http://127.0.0.1:{port}/health")
+    # open_timeout: drop silent/probe connections that never send HTTP
+    async with serve(
+        ws_handler,
+        host,
+        port,
+        process_request=process_request,
+        ping_interval=20,
+        ping_timeout=20,
+        close_timeout=5,
+        open_timeout=10,
+        max_size=2 * 1024 * 1024,
+        compression=None,  # lower CPU on free tier
+    ):
+        log(f"  LISTENING on http://{host}:{port} (Render port scan should pass)")
         asyncio.create_task(room_heartbeat_loop())
         await asyncio.get_running_loop().create_future()
 
 
 def main() -> None:
     p = argparse.ArgumentParser()
+    env_port = os.environ.get("PORT", "8765")
+    try:
+        default_port = int(str(env_port).strip() or "8765")
+    except ValueError:
+        default_port = 8765
     p.add_argument("--host", default="0.0.0.0")
-    p.add_argument("--port", type=int, default=int(os.environ.get("PORT", "8765")))
+    p.add_argument("--port", type=int, default=default_port)
     args = p.parse_args()
     try:
         asyncio.run(main_async(args.host, args.port))
     except KeyboardInterrupt:
-        print("\nbye")
+        print("\nbye", flush=True)
         sys.exit(0)
 
 

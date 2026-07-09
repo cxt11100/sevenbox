@@ -1,79 +1,27 @@
 # SevenBox multiplayer
 
-Live room sync for SevenBox. Same song, room code, friends join.
+Browser multiplayer for SevenBox on a **permanent host** (e.g. Render).
 
-## What you need once
+## Friends (normal use)
 
-- Python 3 (you already have it)
-- Project folder: `nyx-agent` with `.venv` (already set up)
+1. Open the same site forever, e.g. `https://sevenbox.onrender.com/chipbox.html`
+2. Enter a name
+3. **Host server** (public or private) **or** join from the public list / room code
+4. **Share invite** copies a link like  
+   `https://sevenbox.onrender.com/chipbox.html?room=ABC12`
 
-## Start the server
+No same Wi‑Fi. No tunnel. No launcher required for online play.
 
-```bash
-cd ~/projects/nyx-agent
-.venv/bin/python multiplayer/server.py
-```
+**Note:** Free hosts sleep when idle — first open can take 30–60s.
 
-Then open:
-
-**http://127.0.0.1:8765/chipbox.html**
-
-## You (host)
-
-1. Open that link  
-2. Type your name  
-3. Click **Create room**  
-4. Copy the **room code** (e.g. `A3K9Q`)  
-5. Send friends: the **link** + the **code**
-
-## Friends
-
-1. Open the **same link** you sent  
-2. Type their name  
-3. Paste the **code**  
-4. Click **Join**  
-5. Edit — changes show up for everyone (~0.3s)
-
-## Same Wi‑Fi (LAN)
-
-1. On your machine, find your IP:
-   ```bash
-   hostname -I | awk '{print $1}'
-   ```
-2. Friends open: `http://YOUR_IP:8765/chipbox.html`  
-3. You create room; they join with the code  
-
-Firewall may ask to allow Python on port **8765** — allow it.
-
-## Internet (friends anywhere)
-
-Your PC must be reachable from outside. Easiest free options:
-
-### Option A — Cloudflare Tunnel (free account)
+## Local dev (optional)
 
 ```bash
-# install cloudflared, then:
-cloudflared tunnel --url http://127.0.0.1:8765
+pip install -r requirements.txt
+python multiplayer/server.py
+# http://127.0.0.1:8765/chipbox.html
 ```
 
-It prints a public `https://….trycloudflare.com` URL.  
-Share **that** URL + room code. Keep `server.py` running.
+## Health
 
-### Option B — ngrok
-
-```bash
-ngrok http 8765
-```
-
-Share the ngrok HTTPS URL + room code.
-
-## Notes
-
-- **Solo still works** if the server is off (multiplayer bar will say server offline).  
-- Sync is full-song snapshots (last edit wins if two people change at once).  
-- Songs are yours; server only relays room data in memory (nothing saved to disk by the server).  
-- Original tracker: [beepbox.co](https://www.beepbox.co/) (John Nesky, MIT).
-
-## Stop
-
-`Ctrl+C` in the terminal running the server.
+`GET /health` → `{"ok": true, "app": "SevenBox", "v": 4, ...}`

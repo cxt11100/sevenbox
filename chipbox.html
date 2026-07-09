@@ -3,11 +3,11 @@
 <head>
 	<meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-	<title>SevenBox · owned by seven</title>
+	<title>SevenBox</title>
 	<meta name="mobile-web-app-capable" content="yes" />
 	<meta name="apple-mobile-web-app-capable" content="yes" />
 	<meta name="apple-mobile-web-app-status-bar-style" content="black" />
-	<meta name="theme-color" content="#1c1730" />
+	<meta name="theme-color" content="#000000" />
 	<meta name="format-detection" content="telephone=no" />
 	<!-- fonts: system-ui only (faster on phone) -->
 <meta name="robots" content="noindex, nofollow" />
@@ -19,6 +19,7 @@
 			font-family: 'Roboto', sans-serif;
 			line-height: 1.3;
 			color: var(--primary-text, white);
+			max-width: 100%;
 		}
 		body {
 			margin: auto;
@@ -27,23 +28,28 @@
 			flex-direction: column;
 			align-items: center;
 			align-content: center;
+			max-width: 100%;
+			box-sizing: border-box;
 		}
 		#beepboxEditorContainer {
 			min-height: 645px;
-			overflow: auto;
+			overflow-x: auto;
+			overflow-y: auto;
 			background: var(--editor-background, black);
 			width: 100%;
-			max-width: 710px;
-			padding-left: 30px;
-			padding-right: 30px;
+			max-width: 100%;
+			padding-left: 0;
+			padding-right: 0;
+			box-sizing: border-box;
 		}
 		#text-content {
 			overflow: auto;
 			background: var(--editor-background, black);
 			width: 100%;
 			max-width: 710px;
-			padding-left: 30px;
-			padding-right: 30px;
+			padding-left: 16px;
+			padding-right: 16px;
+			box-sizing: border-box;
 		}
 		h1 {
 			font-size: 1.7rem;
@@ -116,12 +122,12 @@
 			}
 		}
 	
-/* SevenBox full layout — Grok build, seven owner · lag-safe */
+/* SevenBox layout — classic dark studio look */
 html {
-  background: #06050c !important;
-  font-family: system-ui, "Segoe UI", "DM Sans", sans-serif !important;
-  font-size: 15px !important;
-  color: #ebe6f8;
+  background: #000 !important;
+  font-family: "Roboto", system-ui, "Segoe UI", sans-serif !important;
+  font-size: large !important;
+  color: #fff;
 }
 body {
   margin: 0 !important;
@@ -130,16 +136,17 @@ body {
   width: 100% !important;
   display: block !important;
   align-items: stretch !important;
-  background:
-    radial-gradient(900px 420px at 15% 0%, rgba(120, 80, 220, 0.14), transparent 60%),
-    radial-gradient(700px 380px at 90% 20%, rgba(60, 200, 255, 0.08), transparent 55%),
-    #06050c !important;
+  background: #000 !important;
 }
 .sb-app {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   width: 100%;
+  max-width: 710px; /* classic BeepBox chrome width — do not squeeze the grid */
+  margin: 0 auto;
+  background: #000;
+  box-sizing: border-box;
 }
 .sb-header {
   position: sticky;
@@ -149,47 +156,47 @@ body {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 12px 20px;
-  background: rgba(10, 8, 18, 0.92);
-  border-bottom: 1px solid rgba(155, 109, 255, 0.22);
-  box-shadow: 0 4px 20px rgba(0,0,0,0.35);
+  gap: 10px;
+  padding: 10px 16px;
+  background: #000;
+  border-bottom: 1px solid #333;
+  box-shadow: none;
 }
 .sb-brand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
 }
 .sb-logo {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: linear-gradient(145deg, #7a4dff, #3ecfff);
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  background: #fff;
   display: grid;
   place-items: center;
   font-weight: 800;
-  font-size: 14px;
-  color: #fff;
+  font-size: 13px;
+  color: #000;
   letter-spacing: -0.02em;
   flex-shrink: 0;
 }
 .sb-brand-text h1 {
   margin: 0 !important;
-  font-size: 1.15rem !important;
+  font-size: 1.35rem !important;
   font-weight: 700 !important;
-  letter-spacing: -0.02em;
-  color: #f2ecff !important;
+  letter-spacing: 0;
+  color: #fff !important;
   text-align: left !important;
   background: none !important;
   -webkit-text-fill-color: unset !important;
 }
 .sb-brand-text p {
-  margin: 2px 0 0 !important;
+  margin: 1px 0 0 !important;
   font-size: 12px;
-  color: #9a8fb8;
+  color: #aaa;
 }
-.sb-brand-text strong { color: #c4b0ff; font-weight: 600; }
+.sb-brand-text strong { color: #ddd; font-weight: 600; }
 .sb-header-actions {
   display: flex;
   flex-wrap: wrap;
@@ -198,72 +205,81 @@ body {
 }
 .sb-header-actions a, .sb-header-actions button {
   font-size: 12px;
-  padding: 7px 12px;
-  border-radius: 8px;
-  border: 1px solid rgba(155, 109, 255, 0.3);
-  background: #141022;
-  color: #e8dfff;
+  padding: 6px 10px;
+  border-radius: 4px;
+  border: 1px solid #555;
+  background: #111;
+  color: #eee;
   text-decoration: none;
   cursor: pointer;
   font-family: inherit;
 }
 .sb-header-actions a:hover, .sb-header-actions button:hover {
-  border-color: #9b6dff;
+  border-color: #888;
   color: #fff;
 }
-.sb-header-actions a.sb-ext {
-  border-color: rgba(122, 231, 255, 0.35);
-  color: #7ae7ff;
-}
+.sb-header-actions a.sb-ext { display: none !important; }
 .sb-main {
   flex: 1;
   width: 100%;
-  max-width: 920px;
+  max-width: 100%;
   margin: 0 auto;
-  padding: 16px 14px 8px;
+  padding: 10px 8px 8px;
   box-sizing: border-box;
+  min-width: 0;
 }
 .sb-stage {
-  border-radius: 16px;
-  border: 1px solid rgba(155, 109, 255, 0.22);
-  background: #0c0a16;
-  box-shadow: 0 10px 32px rgba(0,0,0,0.4);
-  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid #333;
+  background: #000;
+  box-shadow: none;
+  /* let the editor keep its natural size (full pitch grid) */
+  overflow: visible;
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
 }
 .sb-stage-label {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-  padding: 8px 14px;
+  padding: 8px 12px;
   font-size: 11px;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #9a8fb8;
-  background: #120e20;
-  border-bottom: 1px solid rgba(155, 109, 255, 0.15);
+  color: #888;
+  background: #0a0a0a;
+  border-bottom: 1px solid #333;
 }
-.sb-stage-label span { color: #c4b0ff; }
+.sb-stage-label span { color: #ccc; }
 #beepboxEditorContainer {
   width: 100% !important;
-  max-width: none !important;
   min-height: 645px;
   margin: 0 !important;
-  padding: 12px 16px 8px !important;
-  background: var(--editor-background, #0c0a16) !important;
+  padding: 4px 0 8px 0 !important;
+  background: var(--editor-background, #000) !important;
   border-radius: 0 !important;
   border: none !important;
   box-shadow: none !important;
-  overflow: auto;
+  /* scroll if needed — never shrink/squash BeepBox SVG grids */
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+  box-sizing: border-box !important;
+  -webkit-overflow-scrolling: touch;
+  position: relative !important;
 }
+/* Do NOT force max-width/height on editor SVGs — that halves the music grid */
 #bbn-studio {
   width: 100%;
-  max-width: none;
+  max-width: 100%;
   margin: 0;
   padding: 12px 14px 14px;
-  border-top: 1px solid rgba(155, 109, 255, 0.15);
-  background: #100c1c;
-  color: #ebe6f8;
+  border-top: 1px solid #333;
+  background: #0a0a0a;
+  color: #ddd;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 #bbn-studio .bbn-row {
   display: flex;
@@ -420,94 +436,169 @@ body {
 .column-container { width: auto !important; max-width: 100%; }
 .donation { display: none !important; }
 
-/* Remote cursors + same-channel ghost */
-#beepboxEditorContainer { position: relative !important; }
+/* Remote multiplayer: simple arrow cursor + track-selection bar (not mouse crosshair) */
 #sb-cursor-layer {
   position: absolute;
-  inset: 0;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   pointer-events: none;
   z-index: 40;
   overflow: hidden;
+  box-sizing: border-box;
 }
+/* Simple arrow cursor (mouse position) */
 .sb-remote-cursor {
   position: absolute;
-  transform: translate(-1px, -1px);
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
   pointer-events: none;
-  z-index: 41;
-  will-change: left, top;
-  /* position smoothed in JS (lerp), not CSS transition */
+  z-index: 42;
+  --line: #ff5ec8;
+  transform: translate(-2px, -2px);
 }
 .sb-remote-cursor .sb-cur-arrow {
-  width: 12px;
-  height: 12px;
-  border-radius: 2px 10px 10px 10px;
-  background: currentColor;
-  box-shadow:
-    0 0 0 1px rgba(0,0,0,0.55),
-    0 2px 6px rgba(0,0,0,0.35);
-  transform: rotate(-20deg);
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 0 14px 10px;
+  border-color: transparent transparent transparent var(--line);
+  filter: drop-shadow(0 0 1px #000) drop-shadow(1px 1px 0 #000);
 }
 .sb-remote-cursor .sb-cur-label {
   position: absolute;
   left: 12px;
-  top: 10px;
-  padding: 2px 7px 3px;
-  border-radius: 999px;
-  font: 600 10px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif;
-  letter-spacing: 0.02em;
-  color: #0c0a16;
-  background: currentColor;
+  top: -2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 5px 1px 6px;
+  border-radius: 4px;
+  font: 700 10px/1.2 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #1a1020;
+  background: var(--line);
   white-space: nowrap;
-  max-width: 100px;
+  max-width: 120px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
+.sb-remote-cursor .sb-cur-label .sb-cur-name {
+  font-weight: 800;
+  max-width: 70px;
   overflow: hidden;
   text-overflow: ellipsis;
-  box-shadow:
-    0 0 0 1px rgba(255,255,255,0.12),
-    0 2px 8px rgba(0,0,0,0.4);
-  opacity: 0.95;
 }
-.sb-remote-cursor .sb-cur-label span {
-  color: #0c0a16;
-  /* readable on bright cursor colors */
-  filter: none;
-  mix-blend-mode: normal;
-  font-weight: 700;
+.sb-remote-cursor .sb-cur-label .sb-cur-ch {
+  font: 800 9px/1 system-ui, sans-serif;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: rgba(0,0,0,0.22);
+  color: #fff;
 }
-/* invert text via dual layer for contrast on light/dark hues */
-.sb-remote-cursor .sb-cur-label {
-  background: color-mix(in srgb, currentColor 88%, white 12%);
-}
-.sb-remote-cursor.same-ch .sb-cur-ghost {
-  position: absolute;
-  left: -12px;
-  top: -12px;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0.2;
-  border: 1.5px solid currentColor;
-  animation: sbGhostPulse 1.25s ease-in-out infinite;
+.sb-remote-cursor.same-ch .sb-cur-arrow {
+  border-left-width: 11px;
+  border-bottom-width: 15px;
+  filter: drop-shadow(0 0 3px var(--line)) drop-shadow(1px 1px 0 #000);
 }
 .sb-remote-cursor.same-ch .sb-cur-label {
-  box-shadow:
-    0 0 0 1px rgba(255,255,255,0.25),
-    0 0 10px color-mix(in srgb, currentColor 45%, transparent);
+  outline: 1px solid #fff;
 }
-@keyframes sbGhostPulse {
-  0%, 100% { transform: scale(1); opacity: 0.16; }
-  50% { transform: scale(1.2); opacity: 0.3; }
-}
-.sb-peer-chip.ghost-same {
-  opacity: 0.95 !important;
-  border-style: dashed !important;
-  border-width: 2px !important;
-  box-shadow: 0 0 0 1px rgba(109,255,168,0.25);
-}
-.sb-peer-chip.ghost-same::after {
-  content: " · same ch";
+.sb-remote-cursor.dim-ch {
   opacity: 0.85;
-  font-weight: 600;
+}
+/* Track selection bar — sits on channel rows (0,1,2,3…), follows track not mouse */
+.sb-track-line {
+  position: absolute;
+  left: 0;
+  height: 28px;
+  pointer-events: none;
+  z-index: 41;
+  box-sizing: border-box;
+  --line: #ff5ec8;
+  border: 2px solid var(--line);
+  border-radius: 3px;
+  /* default / other channel = solid, easy to see */
+  opacity: 1;
+  background: rgba(255, 94, 200, 0.2);
+  box-shadow: 0 0 10px rgba(255, 94, 200, 0.45), inset 0 0 0 1px rgba(255,255,255,0.18);
+}
+.sb-track-line .sb-track-tag {
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font: 800 10px/1.2 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #1a1020;
+  background: var(--line);
+  white-space: nowrap;
+  max-width: 140px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+}
+.sb-track-line .sb-track-tag .sb-cur-name {
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sb-track-line .sb-track-tag .sb-cur-ch {
+  font: 800 9px/1 system-ui, sans-serif;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: rgba(0,0,0,0.22);
+  color: #fff;
+}
+/* Soft pulse so ghost same-ch still reads as active */
+@keyframes sb-ghost-track {
+  0%, 100% { opacity: 0.34; }
+  50% { opacity: 0.5; }
+}
+/* Same channel as you → ghostly (both can see you share the track) */
+.sb-track-line.same-ch {
+  border-style: dashed;
+  border-width: 2px;
+  background: rgba(255, 94, 200, 0.07);
+  box-shadow: 0 0 14px rgba(255, 94, 200, 0.28), inset 0 0 8px rgba(255, 255, 255, 0.06);
+  filter: saturate(0.75) brightness(1.08);
+  animation: sb-ghost-track 2.4s ease-in-out infinite;
+}
+.sb-track-line.same-ch .sb-track-tag {
+  opacity: 0.78;
+  color: var(--line);
+  background: rgba(10, 6, 14, 0.55);
+  border: 1px solid var(--line);
+  box-shadow: 0 0 8px rgba(255, 94, 200, 0.25);
+}
+.sb-track-line.same-ch .sb-track-tag .sb-cur-ch {
+  background: rgba(255, 94, 200, 0.2);
+  color: #ffe6f7;
+}
+/* Different channel → solid (not ghostly) */
+.sb-track-line.dim-ch {
+  opacity: 1;
+  border-style: solid;
+  filter: none;
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sb-track-line.same-ch { animation: none; opacity: 0.4; }
+}
+/* Same-channel cursor also reads a bit ghostly */
+.sb-remote-cursor.same-ch {
+  opacity: 0.55;
+  filter: saturate(0.8);
+}
+.sb-remote-cursor.dim-ch {
+  opacity: 1;
+  filter: none;
 }
 
 #sb-sync-pill {
@@ -537,16 +628,20 @@ body {
 /* Server browser / lobby */
 #sb-mp-lobby {
   width: 100%;
+  max-width: 100%;
   margin-top: 8px;
-  border-top: 1px solid rgba(109,255,168,0.15);
+  border-top: 1px solid #333;
   padding-top: 8px;
+  box-sizing: border-box;
+  overflow-x: hidden;
+  min-width: 0;
 }
 #sb-mp-lobby h3 {
   margin: 0 0 6px;
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #6dffa8;
+  color: #ccc;
   font-weight: 700;
 }
 #sb-mp-lobby-list {
@@ -554,7 +649,11 @@ body {
   flex-direction: column;
   gap: 6px;
   max-height: 180px;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 .sb-srv {
   display: flex;
@@ -562,9 +661,18 @@ body {
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
-  border-radius: 10px;
-  background: rgba(18,32,24,0.9);
-  border: 1px solid rgba(109,255,168,0.2);
+  border-radius: 8px;
+  background: #121212;
+  border: 1px solid #333;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+}
+.sb-srv .sb-srv-title,
+.sb-srv .sb-srv-meta {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .sb-srv .sb-srv-title {
   flex: 1 1 120px;
@@ -641,19 +749,45 @@ body {
 }
 .sb-peer-chip {
   display: inline-flex; align-items: center; gap: 5px;
-  padding: 3px 8px; border-radius: 999px;
-  font-size: 11px; background: rgba(109,255,168,0.08);
-  border: 1px solid rgba(109,255,168,0.25); color: #c8f5d8;
+  padding: 4px 8px; border-radius: 999px;
+  font-size: 11px; font-weight: 600;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.14); color: #ddd;
 }
-.sb-peer-chip.view { border-color: rgba(122,231,255,0.35); color: #b8eaff; background: rgba(122,231,255,0.08); }
-.sb-peer-chip.host { border-color: rgba(255,215,109,0.45); color: #ffe6a0; }
+.sb-peer-chip.view { border-color: rgba(122,231,255,0.4); color: #b8eaff; background: rgba(122,231,255,0.1); }
+.sb-peer-chip.host { border-color: rgba(255,215,109,0.5); color: #ffe6a0; }
 .sb-peer-chip .dot {
-  width: 7px; height: 7px; border-radius: 50%;
-  background: var(--pc, #6dffa8); opacity: 0.85;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--pc, #6dffa8); opacity: 0.95;
+  flex-shrink: 0;
 }
+.sb-peer-chip .ch-badge {
+  font: 800 9px/1 system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.12);
+  color: inherit;
+}
+/* Same channel as you — highlight, not fade */
 .sb-peer-chip.ghost-same {
-  opacity: 0.55;
-  border-style: dashed;
+  opacity: 1;
+  border-style: solid;
+  border-width: 2px;
+  border-color: rgba(109,255,168,0.65);
+  background: rgba(109,255,168,0.14);
+  box-shadow: 0 0 0 1px rgba(109,255,168,0.2), 0 0 10px rgba(109,255,168,0.15);
+}
+.sb-peer-chip.ghost-same .ch-badge {
+  background: rgba(109,255,168,0.35);
+  color: #e8fff2;
+}
+.sb-peer-chip.ghost-same::after {
+  content: " same ch";
+  font-weight: 800;
+  font-size: 9px;
+  opacity: 0.9;
+  color: #6dffa8;
 }
 #sb-mp-role-row { width: 100%; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .sb-mp select.sb-mp-role {
@@ -752,43 +886,49 @@ body {
 @media (max-width: 720px) {
   .sb-header { padding: 10px 12px !important; }
   .sb-header-actions .sb-ext { display: none; }
-  .sb-main { padding: 8px 6px !important; }
-  .sb-stage-label { font-size: 10px; padding: 6px 10px; }
+  .sb-main { padding: 6px 2px !important; }
+  .sb-stage-label { font-size: 10px; padding: 6px 8px; }
   #beepboxEditorContainer {
     min-height: 480px !important;
-    padding: 6px 4px !important;
+    padding: 4px 2px !important;
     -webkit-overflow-scrolling: touch;
   }
   .sb-mp { padding: 8px 10px; }
   #bbn-studio { padding: 10px 10px 12px; }
   .sb-brand-text p { font-size: 11px; }
+  .sb-app { max-width: 100% !important; width: 100% !important; }
 }
 
-/* SevenBox multiplayer UI */
+/* SevenBox multiplayer UI — classic dark (same width as editor, no side gap) */
 .sb-mp {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
   padding: 10px 14px;
-  border-top: 1px solid rgba(94, 220, 160, 0.2);
-  background: #0d1512;
+  border-top: 1px solid #333;
+  background: #0a0a0a;
   font-size: 12px;
-  color: #b8dcc8;
+  color: #ccc;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
+  min-width: 0;
 }
 .sb-mp .sb-mp-title {
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  font-size: 10px;
-  color: #6dffa8;
+  font-size: 11px;
+  color: #ccc;
   margin-right: 4px;
 }
 .sb-mp input[type="text"] {
-  background: #122018;
-  border: 1px solid rgba(109, 255, 168, 0.3);
-  border-radius: 8px;
-  color: #e8fff2;
+  background: #111;
+  border: 1px solid #444;
+  border-radius: 4px;
+  color: #eee;
   padding: 6px 10px;
   font-size: 12px;
   font-family: ui-monospace, monospace;
@@ -796,41 +936,572 @@ body {
 }
 .sb-mp input.sb-mp-name { width: 110px; font-family: inherit; }
 .sb-mp button {
-  background: #163526;
-  color: #e8fff2;
-  border: 1px solid rgba(109, 255, 168, 0.35);
-  border-radius: 8px;
+  background: #1a1a1a;
+  color: #eee;
+  border: 1px solid #555;
+  border-radius: 4px;
   padding: 6px 10px;
   font-size: 12px;
   cursor: pointer;
   font-family: inherit;
 }
-.sb-mp button:hover { border-color: #6dffa8; }
+.sb-mp button:hover { border-color: #888; }
 .sb-mp button.primary {
-  background: #1a8f55;
-  border-color: #6dffa8;
+  background: #222;
+  border-color: #888;
   font-weight: 600;
+  color: #fff;
 }
 .sb-mp button:disabled { opacity: 0.45; cursor: default; }
 .sb-mp-status {
   flex: 1 1 140px;
   min-width: 120px;
-  color: #8ab89a;
+  color: #999;
   font-size: 11.5px;
 }
-.sb-mp-status.on { color: #6dffa8; }
+.sb-mp-status.on { color: #ccc; }
 .sb-mp-status.err { color: #ff8a9a; }
 .sb-mp-dot {
   display: inline-block;
   width: 7px; height: 7px;
   border-radius: 50%;
-  background: #556;
+  background: #555;
   margin-right: 5px;
   vertical-align: middle;
 }
 .sb-mp-status.on .sb-mp-dot {
-  background: #6dffa8;
+  background: #4c4;
   box-shadow: 0 0 6px #6dffa8;
+}
+
+/* Live online counter */
+#sb-online-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  width: 100%;
+  margin: 0 0 6px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: #0c0c0c;
+  border: 1px solid #333;
+  font: 600 12px/1.3 system-ui, -apple-system, sans-serif;
+  color: #bbb;
+}
+#sb-online-bar .sb-on-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: #151515;
+  border: 1px solid #444;
+  color: #ddd;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+#sb-online-bar .sb-on-pill .n {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+}
+#sb-online-bar .sb-on-meta {
+  color: #777;
+  font-weight: 600;
+  font-size: 11px;
+}
+#sb-online-bar .sb-on-live {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #4c4;
+  box-shadow: none;
+  animation: none;
+}
+
+/* Floating owner GUI — only for name seven (hidden from everyone else) */
+#sb-seven-fab {
+  display: none;
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 100050;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 1px solid rgba(212,175,55,0.55);
+  background: linear-gradient(145deg, #2a1848, #1a1028 55%, #3a2810);
+  color: #f0d78c;
+  font: 800 13px/1 system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.45), 0 0 20px rgba(155,109,255,0.25);
+}
+#sb-seven-fab.sb-show { display: grid; place-items: center; }
+#sb-seven-fab:hover {
+  transform: scale(1.05);
+  box-shadow: 0 10px 32px rgba(0,0,0,0.5), 0 0 28px rgba(212,175,55,0.3);
+}
+
+#sb-seven-vault {
+  display: none;
+  position: fixed;
+  right: 16px;
+  bottom: 76px;
+  z-index: 100051;
+  width: min(360px, calc(100vw - 24px));
+  max-height: min(78vh, 640px);
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid rgba(212,175,55,0.4);
+  background:
+    radial-gradient(ellipse 90% 70% at 0% 0%, rgba(155,109,255,0.35), transparent 55%),
+    radial-gradient(ellipse 80% 50% at 100% 100%, rgba(212,175,55,0.2), transparent 50%),
+    linear-gradient(165deg, #1a1028 0%, #0c0814 50%, #141018 100%);
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.04) inset,
+    0 16px 48px rgba(0,0,0,0.55),
+    0 0 36px rgba(155,109,255,0.18);
+  font-family: system-ui, -apple-system, sans-serif;
+}
+#sb-seven-vault.sb-show { display: flex; flex-direction: column; }
+#sb-seven-vault.sb-unlocked {
+  border-color: rgba(212,175,55,0.55);
+}
+#sb-vault-inner {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: min(78vh, 640px);
+  overflow: hidden;
+}
+.sb-vault-head {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(212,175,55,0.25);
+  background: linear-gradient(90deg, rgba(155,109,255,0.22), rgba(212,175,55,0.1), transparent 80%);
+  cursor: grab;
+  user-select: none;
+  flex-shrink: 0;
+}
+.sb-vault-head:active { cursor: grabbing; }
+.sb-vault-badge {
+  font: 800 9px/1 system-ui, sans-serif;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #120c1c;
+  background: linear-gradient(135deg, #f0d78c, #d4af37);
+  padding: 5px 8px;
+  border-radius: 5px;
+  box-shadow: 0 2px 8px rgba(212,175,55,0.35);
+}
+.sb-vault-title {
+  flex: 1 1 auto;
+  font: 800 13px/1.2 system-ui, sans-serif;
+  color: #f5e6b8;
+  letter-spacing: 0.02em;
+  min-width: 0;
+}
+.sb-vault-title span { color: #c4a0ff; font-weight: 700; display: inline; }
+.sb-vault-head-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.sb-vault-head-actions button {
+  width: 28px !important;
+  height: 28px !important;
+  padding: 0 !important;
+  border-radius: 6px !important;
+  border: 1px solid rgba(255,255,255,0.12) !important;
+  background: rgba(0,0,0,0.35) !important;
+  color: #ddd !important;
+  font: 700 14px/1 system-ui, sans-serif !important;
+  cursor: pointer;
+}
+.sb-vault-head-actions button:hover {
+  border-color: rgba(212,175,55,0.5) !important;
+  color: #f0d78c !important;
+}
+.sb-vault-muted { color: #a898c0 !important; font-size: 12px !important; }
+.sb-vault-body {
+  padding: 12px 14px 14px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+  flex: 1 1 auto;
+  -webkit-overflow-scrolling: touch;
+}
+.sb-vault-locked p {
+  margin: 0 0 12px;
+  font: 500 12px/1.45 system-ui, sans-serif;
+  color: #c8b8e0;
+}
+#sb-seven-vault .sb-vault-verify {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px !important;
+  border-radius: 8px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 11px !important;
+  color: #120c1c !important;
+  background: linear-gradient(135deg, #f0d78c, #d4af37) !important;
+  border: 1px solid #ffe6a0 !important;
+  box-shadow: 0 4px 16px rgba(212,175,55,0.3);
+  cursor: pointer;
+}
+#sb-seven-vault .sb-vault-verify:hover {
+  filter: brightness(1.06);
+  box-shadow: 0 6px 20px rgba(212,175,55,0.45);
+}
+.sb-vault-dob {
+  display: none;
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(155,109,255,0.35);
+}
+.sb-vault-dob.sb-show { display: block; }
+.sb-vault-dob label {
+  display: block;
+  font: 800 11px system-ui, sans-serif;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #d4af37;
+  margin-bottom: 8px;
+}
+.sb-vault-dob input {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(212,175,55,0.4);
+  background: #0c0a12;
+  color: #f5e6b8;
+  font: 700 14px/1.2 ui-monospace, monospace;
+  margin-bottom: 8px;
+}
+.sb-vault-dob .sb-vault-dob-err {
+  display: none;
+  color: #ff8a9a;
+  font: 600 12px system-ui, sans-serif;
+  margin: 0 0 8px;
+}
+.sb-vault-dob .sb-vault-dob-err.sb-show { display: block; }
+.sb-vault-open { display: none; }
+#sb-seven-vault.sb-unlocked .sb-vault-locked { display: none; }
+#sb-seven-vault.sb-unlocked .sb-vault-open { display: block; }
+.sb-vault-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.sb-vault-stat {
+  padding: 10px 10px 8px;
+  border-radius: 10px;
+  background: linear-gradient(160deg, rgba(155,109,255,0.14), rgba(0,0,0,0.3));
+  border: 1px solid rgba(212,175,55,0.22);
+  text-align: center;
+}
+.sb-vault-stat .v {
+  font: 800 22px/1.1 system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  color: #f0d78c;
+  text-shadow: 0 0 14px rgba(212,175,55,0.35);
+}
+.sb-vault-stat .l {
+  margin-top: 4px;
+  font: 700 9px/1.2 system-ui, sans-serif;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #a890d0;
+}
+.sb-vault-hello {
+  margin: 0 0 10px;
+  font: 600 12px/1.4 system-ui, sans-serif;
+  color: #e8dfff;
+}
+.sb-vault-hello b { color: #f0d78c; }
+.sb-vault-rooms {
+  max-height: 120px;
+  overflow: auto;
+  font: 600 11px/1.4 ui-monospace, monospace;
+  color: #d4c4f0;
+  background: rgba(0,0,0,0.4);
+  border-radius: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(212,175,55,0.2);
+  margin-bottom: 10px;
+}
+.sb-vault-rooms .empty { color: #6a5a80; font-family: system-ui, sans-serif; }
+.sb-vault-section {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(155,109,255,0.22);
+}
+.sb-vault-section h4 {
+  margin: 0 0 8px;
+  font: 800 10px/1 system-ui, sans-serif;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #d4af37;
+}
+.sb-vault-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.sb-vault-row select,
+.sb-vault-row input[type="text"] {
+  flex: 1 1 120px;
+  min-width: 100px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(155,109,255,0.35);
+  background: #100c18;
+  color: #f0e6ff;
+  font: 600 12px system-ui, sans-serif;
+}
+.sb-vault-row button {
+  font-weight: 800 !important;
+  font-size: 11px !important;
+}
+.sb-vault-themes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.sb-vault-themes button {
+  flex: 1 1 88px;
+  min-width: 84px;
+  padding: 8px 6px !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 8px !important;
+  border: 1px solid rgba(212,175,55,0.35) !important;
+  background: rgba(155,109,255,0.12) !important;
+  color: #f0d78c !important;
+}
+.sb-vault-themes button:hover,
+.sb-vault-themes button.sb-on {
+  border-color: #d4af37 !important;
+  background: linear-gradient(135deg, rgba(155,109,255,0.35), rgba(212,175,55,0.25)) !important;
+  color: #fff8e0 !important;
+  box-shadow: 0 0 12px rgba(155,109,255,0.3);
+}
+/* Site-wide announce banner (everyone) — temporary toast, not permanent */
+#sb-site-announce {
+  display: none;
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 99995;
+  max-width: min(520px, 94vw);
+  padding: 10px 36px 10px 16px;
+  border-radius: 12px;
+  font: 700 13px/1.35 system-ui, sans-serif;
+  text-align: center;
+  color: #1a1020;
+  background: linear-gradient(135deg, #e8d4ff, #f0d78c 55%, #d4af37);
+  border: 1px solid rgba(255,255,255,0.35);
+  box-shadow: 0 8px 28px rgba(80,40,120,0.4);
+  pointer-events: auto;
+  cursor: default;
+  opacity: 1;
+  transition: opacity 0.35s ease;
+}
+#sb-site-announce.sb-show { display: block; animation: sbAnnIn 0.35s ease; }
+#sb-site-announce.sb-fade { opacity: 0; }
+#sb-site-announce .sb-ann-x {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(0,0,0,0.12);
+  color: #1a1020;
+  font: 700 16px/1 system-ui, sans-serif;
+  cursor: pointer;
+  padding: 0;
+}
+#sb-site-announce .sb-ann-x:hover { background: rgba(0,0,0,0.22); }
+@keyframes sbAnnIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* ── Site themes (everyone) — set by seven ── */
+html[data-sb-theme="purple_gold"] {
+  --page-margin: #12081c;
+  --editor-background: #0e0a16;
+  --primary-text: #f2e8ff;
+}
+html[data-sb-theme="purple_gold"] body,
+html[data-sb-theme="purple_gold"] .sb-app {
+  background: radial-gradient(ellipse 100% 80% at 50% -10%, #2a1848 0%, #12081c 45%, #0a0610 100%) !important;
+}
+html[data-sb-theme="purple_gold"] .sb-header {
+  border-color: rgba(212,175,55,0.35) !important;
+  background: linear-gradient(90deg, rgba(155,109,255,0.18), rgba(212,175,55,0.1)) !important;
+}
+html[data-sb-theme="purple_gold"] .sb-logo {
+  background: linear-gradient(135deg, #9b6dff, #d4af37) !important;
+  color: #12081c !important;
+}
+html[data-sb-theme="purple_gold"] .sb-mp {
+  border-color: rgba(155,109,255,0.35) !important;
+  box-shadow: 0 0 24px rgba(155,109,255,0.12);
+}
+html[data-sb-theme="purple_gold"] .sb-mp .sb-mp-title { color: #f0d78c !important; }
+html[data-sb-theme="purple_gold"] .sb-mp button.primary {
+  background: linear-gradient(135deg, #7b4fd4, #9b6dff) !important;
+  border-color: #d4af37 !important;
+  color: #fff8e8 !important;
+}
+html[data-sb-theme="purple_gold"] #sb-online-bar {
+  border-color: rgba(212,175,55,0.35);
+  background: linear-gradient(90deg, rgba(40,24,64,0.95), rgba(48,32,20,0.9));
+}
+html[data-sb-theme="purple_gold"] #sb-online-bar .sb-on-pill {
+  color: #f0d78c;
+  border-color: rgba(212,175,55,0.4);
+  background: rgba(155,109,255,0.15);
+}
+html[data-sb-theme="purple_gold"] #sb-online-bar .sb-on-live {
+  background: #d4af37;
+  box-shadow: 0 0 8px #d4af37;
+}
+
+html[data-sb-theme="midnight"] {
+  --page-margin: #05060c;
+  --editor-background: #080a12;
+  --primary-text: #d8e0f0;
+}
+html[data-sb-theme="midnight"] body,
+html[data-sb-theme="midnight"] .sb-app {
+  background: #05060c !important;
+}
+html[data-sb-theme="midnight"] .sb-header {
+  border-color: rgba(100,140,255,0.25) !important;
+  background: rgba(20,28,48,0.9) !important;
+}
+html[data-sb-theme="midnight"] .sb-mp .sb-mp-title { color: #8ab4ff !important; }
+html[data-sb-theme="midnight"] .sb-mp button.primary {
+  background: #2a4a9a !important;
+  border-color: #6a9aff !important;
+}
+
+html[data-sb-theme="matrix"] {
+  --page-margin: #020804;
+  --editor-background: #041008;
+  --primary-text: #b8ffc8;
+}
+html[data-sb-theme="matrix"] body,
+html[data-sb-theme="matrix"] .sb-app {
+  background: #020804 !important;
+}
+html[data-sb-theme="matrix"] .sb-header {
+  border-color: rgba(0,255,100,0.3) !important;
+  background: rgba(0,40,16,0.85) !important;
+}
+html[data-sb-theme="matrix"] .sb-mp .sb-mp-title { color: #39ff14 !important; }
+html[data-sb-theme="matrix"] .sb-mp button.primary {
+  background: #0a5020 !important;
+  border-color: #39ff14 !important;
+  color: #c8ffd0 !important;
+}
+html[data-sb-theme="matrix"] #sb-online-bar .sb-on-pill { color: #39ff14; border-color: #39ff14; }
+
+html[data-sb-theme="crimson"] {
+  --page-margin: #120608;
+  --editor-background: #18080c;
+  --primary-text: #ffe0e6;
+}
+html[data-sb-theme="crimson"] body,
+html[data-sb-theme="crimson"] .sb-app {
+  background: radial-gradient(ellipse at top, #3a1018, #120608 60%) !important;
+}
+html[data-sb-theme="crimson"] .sb-header {
+  border-color: rgba(255,80,100,0.35) !important;
+  background: rgba(48,12,20,0.9) !important;
+}
+html[data-sb-theme="crimson"] .sb-mp .sb-mp-title { color: #ff6b7a !important; }
+html[data-sb-theme="crimson"] .sb-mp button.primary {
+  background: #8a2030 !important;
+  border-color: #ff6b7a !important;
+}
+
+html[data-sb-theme="ocean"] {
+  --page-margin: #041018;
+  --editor-background: #061820;
+  --primary-text: #e0f4ff;
+}
+html[data-sb-theme="ocean"] body,
+html[data-sb-theme="ocean"] .sb-app {
+  background: radial-gradient(ellipse at 30% 0%, #0a3048, #041018 55%) !important;
+}
+html[data-sb-theme="ocean"] .sb-header {
+  border-color: rgba(80,200,255,0.3) !important;
+  background: rgba(8,40,56,0.9) !important;
+}
+html[data-sb-theme="ocean"] .sb-mp .sb-mp-title { color: #5ad4ff !important; }
+html[data-sb-theme="ocean"] .sb-mp button.primary {
+  background: #106080 !important;
+  border-color: #5ad4ff !important;
+}
+
+html[data-sb-theme="sunset"] {
+  --page-margin: #1a0c08;
+  --editor-background: #201008;
+  --primary-text: #fff0e0;
+}
+html[data-sb-theme="sunset"] body,
+html[data-sb-theme="sunset"] .sb-app {
+  background: linear-gradient(180deg, #4a2010 0%, #1a0c08 50%, #120818 100%) !important;
+}
+html[data-sb-theme="sunset"] .sb-header {
+  border-color: rgba(255,160,80,0.35) !important;
+  background: rgba(60,24,12,0.9) !important;
+}
+html[data-sb-theme="sunset"] .sb-mp .sb-mp-title { color: #ffb060 !important; }
+html[data-sb-theme="sunset"] .sb-mp button.primary {
+  background: #a04818 !important;
+  border-color: #ffb060 !important;
+}
+
+html[data-sb-theme="ice"] {
+  --page-margin: #0c1218;
+  --editor-background: #101820;
+  --primary-text: #e8f4ff;
+}
+html[data-sb-theme="ice"] body,
+html[data-sb-theme="ice"] .sb-app {
+  background: linear-gradient(180deg, #1a2838, #0c1218) !important;
+}
+html[data-sb-theme="ice"] .sb-header {
+  border-color: rgba(180,220,255,0.3) !important;
+  background: rgba(30,48,64,0.9) !important;
+}
+html[data-sb-theme="ice"] .sb-mp .sb-mp-title { color: #b8dcff !important; }
+html[data-sb-theme="ice"] .sb-mp button.primary {
+  background: #386080 !important;
+  border-color: #b8dcff !important;
 }
 
 </style>
@@ -851,6 +1522,7 @@ body {
 
 <audio id="sb-keepalive-audio" src="silent.wav?v=1" loop playsinline webkit-playsinline preload="auto" style="position:fixed;width:0;height:0;opacity:0;pointer-events:none"></audio>
 <div id="sb-sync-pill">Live sync on — keep this tab open</div>
+<div id="sb-site-announce" role="status" aria-live="polite"></div>
 <div id="sb-splash" aria-live="polite">
   <div class="sb-spin" aria-hidden="true"></div>
   <h1>SevenBox</h1>
@@ -860,23 +1532,22 @@ body {
 <div class="sb-app">
   <header class="sb-header">
     <div class="sb-brand">
-      <div class="sb-logo">S7</div>
+      <div class="sb-logo">SB</div>
       <div class="sb-brand-text">
         <h1>SevenBox</h1>
-        <p>Built by <strong>Grok</strong> · Owned by <strong>seven</strong> · private</p>
+        <p>Free online chiptune song editor</p>
       </div>
     </div>
     <div class="sb-header-actions">
-      <button type="button" id="bbn-tips-top">Tips</button>
-      <a class="sb-ext" href="https://www.beepbox.co/" target="_blank" rel="noopener noreferrer">beepbox.co ↗</a>
+      <button type="button" id="bbn-tips-top">Instructions</button>
     </div>
   </header>
 
   <main class="sb-main">
     <div class="sb-stage">
       <div class="sb-stage-label">
-        <span>Studio</span>
-        <span style="color:#9a8fb8;letter-spacing:0.04em;text-transform:none">click grid · patterns · purple loop</span>
+        <span>Editor</span>
+        <span style="color:#888;letter-spacing:0.02em;text-transform:none;font-weight:500">click the grid · patterns · loop bar</span>
       </div>
       <div id="beepboxEditorContainer">
         <noscript>Sorry, SevenBox needs JavaScript on to run.</noscript>
@@ -887,7 +1558,7 @@ body {
           <div class="bbn-how">
             <strong>1.</strong> Place notes ·
             <strong>2.</strong> Patterns ·
-            <strong>3.</strong> Purple loop ·
+            <strong>3.</strong> Loop ·
             <span class="bbn-k">Space</span> play
           </div>
           <button type="button" id="bbn-tips">Show tips</button>
@@ -898,9 +1569,13 @@ body {
       
       <div class="sb-mp" id="sb-mp">
         <span class="sb-mp-title">Multiplayer</span>
+        <div id="sb-online-bar" title="People connected to SevenBox right now">
+          <span class="sb-on-pill"><span class="sb-on-live" aria-hidden="true"></span> Online <span class="n" id="sb-online-count">—</span></span>
+          <span class="sb-on-meta"><span id="sb-online-inrooms">0</span> in rooms · <span id="sb-online-rooms">0</span> rooms · <span id="sb-online-public">0</span> public</span>
+        </div>
         <input class="sb-mp-name" id="sb-mp-name" type="text" maxlength="24" placeholder="your name" />
         <div class="sb-mp-host-opts">
-          <input id="sb-mp-title" type="text" maxlength="40" placeholder="Server title (e.g. late night jam)" />
+          <input id="sb-mp-title" type="text" maxlength="40" placeholder="Title (blank = random)" />
           <select class="sb-mp-role" id="sb-mp-visibility" title="Public = on server list">
             <option value="public" selected>Public</option>
             <option value="private">Private</option>
@@ -914,10 +1589,11 @@ body {
         <input id="sb-mp-code" type="text" maxlength="6" placeholder="CODE" style="text-transform:uppercase" autocomplete="off" />
         <button type="button" id="sb-mp-join">Join code</button>
         <button type="button" id="sb-mp-leave" disabled>Leave</button>
+        <button type="button" id="sb-mp-share" title="Copy invite link for friends">Share invite</button>
         <button type="button" id="sb-mp-refresh">Refresh list</button>
         <button type="button" id="sb-mp-apply-role" title="Host: apply joiner permission to everyone in room">Apply perms</button>
-        <span class="sb-mp-status" id="sb-mp-status"><span class="sb-mp-dot"></span>Solo — host a public/private server or join</span>
-        <div class="sb-mp-banner" id="sb-mp-banner">Everyone uses this same app. Host public/private → join by list or code. Song + play/stop sync for editors. Your personal UI prefs stay local.</div>
+        <span class="sb-mp-status" id="sb-mp-status"><span class="sb-mp-dot"></span>Online host — host a room or join by list/code</span>
+        <div class="sb-mp-banner" id="sb-mp-banner">Same link for everyone. Host or join by list/code. Song + play/stop sync. Blank title = random name. Free host may take ~30–60s to wake.</div>
         <div id="sb-mp-peers"></div>
         <div id="sb-mp-lobby">
           <h3>Public servers</h3>
@@ -929,22 +1605,23 @@ body {
 
     <div id="text-content">
       <section>
-        <h1>How to use SevenBox</h1>
+        <h1>About SevenBox</h1>
         <p>
-          Your private music sketchpad. You own every track you make.
-          Built for you by Grok — offline, no accounts, nothing uploads unless you export.
+          SevenBox is a free online chiptune song editor. Make instrumental tracks in your browser,
+          host a multiplayer room, and jam with friends. No account required — songs you create are yours.
         </p>
         <div class="bbn-grid">
           <div class="bbn-card"><strong>Notes</strong><span>Click the gray rows at the top. Drag sideways to change note length.</span></div>
           <div class="bbn-card"><strong>Patterns</strong><span>Numbered boxes under the grid rearrange the song structure.</span></div>
-          <div class="bbn-card"><strong>Loop</strong><span>Purple bar = loop region. Drag the ends to cover more bars.</span></div>
+          <div class="bbn-card"><strong>Loop</strong><span>The loop bar sets which bars repeat. Drag the ends to cover more bars.</span></div>
           <div class="bbn-card"><strong>Drums</strong><span>Bottom channel row is drums. Rows above = melody &amp; harmony.</span></div>
         </div>
       </section>
       <section>
         <h2>Keyboard</h2>
         <p>
-          <span class="bbn-k">Space</span> play/pause ·
+          <span class="bbn-k">Space</span> play/pause (syncs in multiplayer) ·
+          <span class="bbn-k">Ctrl</span>+<span class="bbn-k">F</span> restart song for everyone ·
           <span class="bbn-k">Z</span> undo ·
           <span class="bbn-k">Y</span> redo ·
           <span class="bbn-k">C</span>/<span class="bbn-k">V</span> copy/paste ·
@@ -953,18 +1630,11 @@ body {
         </p>
       </section>
       <section>
-        <h2>Live multiplayer</h2>
+        <h2>Multiplayer</h2>
         <p>
-          Run the SevenBox server, click <strong>Create room</strong>, send friends the site link + room code.
-          Everyone edits the same song (last change wins if you clash). Works on the same Wi‑Fi, or over the internet with a tunnel.
-        </p>
-        <h2>Credits &amp; ownership</h2>
-        <p>
-          <strong>Owner:</strong> seven<br>
-          <strong>Built by:</strong> Grok (xAI) — SevenBox layout, studio tools, private packaging<br>
-          <strong>Original tracker:</strong> <a href="https://www.beepbox.co/" target="_blank" rel="noopener noreferrer">BeepBox</a> by John Nesky
-          — visit the original site at <a href="https://www.beepbox.co/" target="_blank" rel="noopener noreferrer">https://www.beepbox.co/</a>
-          (MIT license). The music engine is BeepBox; this site shell is SevenBox.
+          Open SevenBox (same link every time). Enter a name → <strong>Host server</strong> or join a public room / code.
+          Use <strong>Share invite</strong> to copy a link with the room code for friends.
+          Everyone edits the same song in the browser. No install and no same Wi‑Fi required.
         </p>
       </section>
     </div>
@@ -973,16 +1643,95 @@ body {
   <footer class="sb-footer">
     <div class="sb-footer-inner">
       <div>
-        <strong>SevenBox</strong> — private build for <strong>seven</strong>.
-        Designed &amp; assembled by <strong>Grok</strong>. Multiplayer rooms when the server is running. Songs you create are yours.
+        <strong>SevenBox</strong> — free online chiptune editor with multiplayer rooms.
       </div>
       <div class="sb-credits">
-        <span>Owner: <strong>seven</strong></span>
-        <span>Built by: <strong>Grok</strong></span>
-        <span>Original: <a href="https://www.beepbox.co/" target="_blank" rel="noopener noreferrer">beepbox.co</a> (John Nesky, MIT)</span>
+        <span>sevenbox</span>
       </div>
     </div>
   </footer>
+</div>
+
+<!-- Floating owner panel: only appears for name "seven" -->
+<button type="button" id="sb-seven-fab" title="Owner panel" aria-label="Owner panel">S7</button>
+<div id="sb-seven-vault" aria-label="Owner panel">
+  <div id="sb-vault-inner">
+    <div class="sb-vault-head" id="sb-vault-drag">
+      <span class="sb-vault-badge">S7</span>
+      <div class="sb-vault-title">Owner <span>// seven</span></div>
+      <div class="sb-vault-head-actions">
+        <button type="button" id="sb-vault-min" title="Minimize">–</button>
+        <button type="button" id="sb-vault-close-ui" title="Close">×</button>
+      </div>
+    </div>
+    <div class="sb-vault-body">
+      <div class="sb-vault-locked">
+        <p class="sb-vault-muted">Verify to open the floating owner console. Theme / kick / announce tools live here.</p>
+        <button type="button" class="sb-vault-verify" id="sb-seven-verify-btn">Verify access</button>
+        <div class="sb-vault-dob" id="sb-seven-dob-box">
+          <label for="sb-seven-dob-input">DOB?</label>
+          <input id="sb-seven-dob-input" type="text" maxlength="16" placeholder="MM/DD/YY" autocomplete="off" spellcheck="false" />
+          <p class="sb-vault-dob-err" id="sb-seven-dob-err">Wrong answer.</p>
+          <button type="button" class="primary" id="sb-seven-dob-go">Unlock</button>
+        </div>
+      </div>
+      <div class="sb-vault-open">
+        <p class="sb-vault-hello">Welcome, <b>seven</b>. Site theme hits <b>everyone</b>.</p>
+        <div class="sb-vault-grid">
+          <div class="sb-vault-stat"><div class="v" id="sb-vault-online">0</div><div class="l">Online</div></div>
+          <div class="sb-vault-stat"><div class="v" id="sb-vault-inrooms">0</div><div class="l">In rooms</div></div>
+          <div class="sb-vault-stat"><div class="v" id="sb-vault-rooms">0</div><div class="l">Rooms</div></div>
+          <div class="sb-vault-stat"><div class="v" id="sb-vault-public">0</div><div class="l">Public</div></div>
+        </div>
+        <div class="sb-vault-section">
+          <h4>Site theme (global)</h4>
+          <div class="sb-vault-themes" id="sb-vault-themes">
+            <button type="button" data-theme="default">Default</button>
+            <button type="button" data-theme="purple_gold" class="sb-on">Purple Gold</button>
+            <button type="button" data-theme="midnight">Midnight</button>
+            <button type="button" data-theme="matrix">Matrix</button>
+            <button type="button" data-theme="crimson">Crimson</button>
+            <button type="button" data-theme="ocean">Ocean</button>
+            <button type="button" data-theme="sunset">Sunset</button>
+            <button type="button" data-theme="ice">Ice</button>
+          </div>
+        </div>
+        <div class="sb-vault-section">
+          <h4>Announce to everyone</h4>
+          <div class="sb-vault-row">
+            <input id="sb-vault-announce" type="text" maxlength="160" placeholder="Message for every player…" />
+            <button type="button" class="primary" id="sb-vault-announce-go">Send</button>
+            <button type="button" id="sb-vault-announce-clear">Clear</button>
+          </div>
+        </div>
+        <div class="sb-vault-section">
+          <h4>All rooms + kick</h4>
+          <div class="sb-vault-row">
+            <button type="button" id="sb-vault-refresh-admin">Refresh list</button>
+          </div>
+          <div class="sb-vault-rooms" id="sb-vault-roomlist"><div class="empty">Unlock + refresh to load rooms.</div></div>
+          <div class="sb-vault-row">
+            <select id="sb-vault-kick-target" title="Player to kick"><option value="">— player —</option></select>
+            <select id="sb-vault-kick-room" title="Optional room filter"><option value="">any room</option></select>
+            <button type="button" id="sb-vault-kick" style="background:#8a2030!important;border-color:#ff6b7a!important">Kick</button>
+          </div>
+          <div class="sb-vault-row">
+            <select id="sb-vault-close-room"><option value="">— close room —</option></select>
+            <button type="button" id="sb-vault-close" style="background:#6a1828!important;border-color:#ff8a9a!important">Close room</button>
+          </div>
+          <div class="sb-vault-row">
+            <select id="sb-vault-role-target"><option value="">— set role player —</option></select>
+            <select id="sb-vault-role-room"><option value="">— room —</option></select>
+            <select id="sb-vault-role-val">
+              <option value="view">view only</option>
+              <option value="edit">edit</option>
+            </select>
+            <button type="button" id="sb-vault-role-go">Set role</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -1000,7 +1749,7 @@ body {
 
   // Native script load — Safari handles this much better than fetch+eval
   var s = document.createElement("script");
-  s.src = "chipbox-app.js?v=audit7";
+  s.src = "chipbox-app.js?v=mp29";
   s.async = false;
   s.onload = function () {
     setMsg("Engine loaded — starting…");
@@ -1028,7 +1777,7 @@ body {
     }, 2000);
   };
   s.onerror = function () {
-    fail("Could not download chipbox-app.js — check tunnel/server, then hard-refresh.");
+    fail("Could not download chipbox-app.js — hard-refresh (Ctrl+Shift+R). If the free host was asleep, wait ~1 min and retry.");
   };
   document.body.appendChild(s);
 })();

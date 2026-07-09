@@ -79,7 +79,7 @@ var editor = null;
 })();
 
 
-/* SevenBox studio chrome — built by Grok, owned by seven */
+/* SevenBox studio chrome */
 (function () {
   var tips = document.getElementById("text-content");
   var tipsBtn = document.getElementById("bbn-tips");
@@ -119,7 +119,19 @@ try {
   var NAME_KEY = "sevenbox_display_name";
   var SEVEN_KEY = "309761!";
   var sessionSevenKey = "";
-  var PEER_COLORS = ["#6dffa8", "#7ae7ff", "#ffd76d", "#ff8cff", "#ff9f7d", "#b8ff6b"];
+  // Shared palette for player chips + grid lines (stable per name)
+  var PEER_COLORS = ["#ff5ec8", "#7ae7ff", "#ffd76d", "#b07cff", "#ff9f7d", "#6dffa8"];
+  function peerColorFor(name, index) {
+    var i = 0;
+    var s = String(name || "");
+    if (s) {
+      for (var k = 0; k < s.length; k++) i = ((i * 31) + s.charCodeAt(k)) | 0;
+      i = Math.abs(i) % PEER_COLORS.length;
+    } else {
+      i = (index || 0) % PEER_COLORS.length;
+    }
+    return PEER_COLORS[i];
+  }
   var BLOCKED_EXACT = {
     admin:1, administrator:1, host:1, owner:1, root:1, mod:1, moderator:1,
     sysadmin:1, system:1, staff:1, op:1, operator:1, superuser:1, sudo:1,
@@ -138,8 +150,12 @@ try {
   var applyingTransport = false;
   var lastTransportSent = "";
   var lastTransportApplied = "";
+  var lastTransportTs = 0;       // ignore out-of-order play/stop
+  var transportHoldUntil = 0;    // after apply, ignore spam briefly
+  var pendingTransportTimer = null;
   var pollTimer = null;
   var presenceTimer = null;
+  var pingTimer = null;
   var connectTimer = null;
   var peers = [];
   var lobbyServers = [];
@@ -149,6 +165,17 @@ try {
   var audioKeep = null;
   var lastTickApply = 0;
   var pointerState = { x: 0.5, y: 0.5, inside: false };
+  var wantRoom = null;       // room code to auto-rejoin after drop
+  var rejoinTimer = null;
+  var rejoinAttempts = 0;
+  var lastPresenceKey = "";
+  var lastSongSig = null;
+  var liveStats = { online: 0, inRooms: 0, rooms: 0, public: 0, lobby: [] };
+  var adminRooms = [];
+  var sevenVaultUnlocked = false;
+  var SEVEN_DOB = "12/12/10";
+  var currentSiteTheme = "default";
+  var THEME_NAMES = ["default","purple_gold","midnight","matrix","crimson","ocean","sunset","ice"];
 
   var tabId = Math.random().toString(36).slice(2) + Date.now().toString(36);
   var bc = null;
@@ -168,9 +195,460 @@ try {
     statusEl.innerHTML = '<span class="sb-mp-dot"></span>' + text;
   }
 
+  function isSevenSession() {
+    return nameLooksLikeSeven(getName()) && sessionSevenKey === SEVEN_KEY;
+  }
+
+  function normalizeDob(s) {
+    return String(s || "")
+      .trim()
+      .replace(/[-.\s]/g, "/")
+      .replace(/\/+/g, "/");
+  }
+
+  function adminAuthPayload(extra) {
+    var o = extra || {};
+    o.name = getName();
+    o.nameKey = sessionSevenKey || SEVEN_KEY;
+    return o;
+  }
+
+  function sendAdmin(type, extra) {
+    if (!sevenVaultUnlocked || !isSevenSession()) {
+      setStatus("Unlock owner vault first", "err");
+      return;
+    }
+    if (!ws || ws.readyState !== 1) {
+      setStatus("Not connected to host", "err");
+      return;
+    }
+    var payload = adminAuthPayload(extra || {});
+    payload.type = type;
+    try { ws.send(JSON.stringify(payload)); } catch (e) {}
+  }
+
+  function applySiteTheme(theme) {
+    theme = String(theme || "default").toLowerCase().replace(/-/g, "_");
+    if (THEME_NAMES.indexOf(theme) < 0) theme = "default";
+    currentSiteTheme = theme;
+    try {
+      document.documentElement.setAttribute("data-sb-theme", theme === "default" ? "" : theme);
+      if (theme === "default") document.documentElement.removeAttribute("data-sb-theme");
+      else document.documentElement.setAttribute("data-sb-theme", theme);
+    } catch (e) {}
+    try {
+      var meta = document.querySelector('meta[name="theme-color"]');
+      var colors = {
+        default: "#1c1730",
+        purple_gold: "#1a0f28",
+        midnight: "#05060c",
+        matrix: "#020804",
+        crimson: "#120608",
+        ocean: "#041018",
+        sunset: "#1a0c08",
+        ice: "#0c1218"
+      };
+      if (meta) meta.setAttribute("content", colors[theme] || colors.default);
+    } catch (e2) {}
+    // highlight theme buttons in vault
+    var wrap = document.getElementById("sb-vault-themes");
+    if (wrap) {
+      var btns = wrap.querySelectorAll("button[data-theme]");
+      for (var i = 0; i < btns.length; i++) {
+        if (btns[i].getAttribute("data-theme") === theme) btns[i].classList.add("sb-on");
+        else btns[i].classList.remove("sb-on");
+      }
+    }
+  }
+
+  // Announcements are temporary toasts (not permanent UI)
+  var announceHideTimer = null;
+  var lastAnnounceKey = "";
+  var announceDismissedKey = "";
+  var ANNOUNCE_SHOW_MS = 10000;
+
+  function hideSiteAnnounce(markDismissed) {
+    var el = document.getElementById("sb-site-announce");
+    if (!el) return;
+    if (announceHideTimer) {
+      clearTimeout(announceHideTimer);
+      announceHideTimer = null;
+    }
+    if (markDismissed && lastAnnounceKey) announceDismissedKey = lastAnnounceKey;
+    el.classList.remove("sb-show");
+    el.classList.remove("sb-fade");
+    el.textContent = "";
+  }
+
+  function showSiteAnnounce(text, ts, ttlMs) {
+    var el = document.getElementById("sb-site-announce");
+    if (!el) return;
+    text = String(text || "").trim();
+    if (!text) {
+      hideSiteAnnounce(false);
+      lastAnnounceKey = "";
+      return;
+    }
+    var key = String(ts || text);
+    // already dismissed this one, or stats re-sending the same banner
+    if (key && key === announceDismissedKey) return;
+    if (key && key === lastAnnounceKey && el.classList.contains("sb-show")) return;
+
+    lastAnnounceKey = key;
+    el.innerHTML =
+      '<span class="sb-ann-text"></span>' +
+      '<button type="button" class="sb-ann-x" aria-label="Dismiss">×</button>';
+    var tx = el.querySelector(".sb-ann-text");
+    if (tx) tx.textContent = "seven: " + text;
+    var xb = el.querySelector(".sb-ann-x");
+    if (xb) {
+      xb.addEventListener("click", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        hideSiteAnnounce(true);
+      });
+    }
+    el.classList.remove("sb-fade");
+    el.classList.add("sb-show");
+
+    var showMs = ttlMs > 0 ? Math.min(ttlMs, 15000) : ANNOUNCE_SHOW_MS;
+    // fade a bit before hide
+    if (announceHideTimer) clearTimeout(announceHideTimer);
+    announceHideTimer = setTimeout(function () {
+      el.classList.add("sb-fade");
+      announceHideTimer = setTimeout(function () {
+        hideSiteAnnounce(true);
+      }, 400);
+    }, Math.max(2000, showMs - 400));
+  }
+
+  function fillAdminSelects(rooms) {
+    adminRooms = rooms || [];
+    var kickT = document.getElementById("sb-vault-kick-target");
+    var kickR = document.getElementById("sb-vault-kick-room");
+    var closeR = document.getElementById("sb-vault-close-room");
+    var roleT = document.getElementById("sb-vault-role-target");
+    var roleR = document.getElementById("sb-vault-role-room");
+    var list = document.getElementById("sb-vault-roomlist");
+    var names = {};
+    var codes = [];
+
+    if (list) {
+      if (!adminRooms.length) {
+        list.innerHTML = '<div class="empty">No rooms open.</div>';
+      } else {
+        list.innerHTML = adminRooms.map(function (r) {
+          var peers = (r.peers || []).map(function (p) { return p.name; }).join(", ") || "—";
+          return escapeHtml(
+            (r.public ? "PUB" : "PRIV") + " " + (r.code || "?") + " · " + (r.title || "") +
+            " · " + (r.count || 0) + " · host " + (r.host || "?") + " · [" + peers + "]"
+          );
+        }).join("<br>");
+      }
+    }
+
+    adminRooms.forEach(function (r) {
+      codes.push(r.code);
+      (r.peers || []).forEach(function (p) {
+        if (p && p.name) names[p.name] = 1;
+      });
+    });
+
+    function fillSel(sel, placeholder, items, isRoom) {
+      if (!sel) return;
+      var cur = sel.value;
+      sel.innerHTML = "";
+      var o0 = document.createElement("option");
+      o0.value = "";
+      o0.textContent = placeholder;
+      sel.appendChild(o0);
+      items.forEach(function (it) {
+        var o = document.createElement("option");
+        o.value = it;
+        o.textContent = it;
+        sel.appendChild(o);
+      });
+      if (cur) sel.value = cur;
+    }
+    fillSel(kickT, "— player —", Object.keys(names).sort());
+    fillSel(kickR, "any room", codes);
+    fillSel(closeR, "— close room —", codes);
+    fillSel(roleT, "— set role player —", Object.keys(names).sort());
+    fillSel(roleR, "— room —", codes);
+  }
+
+  function updateOnlineUi(st) {
+    if (!st) return;
+    liveStats.online = st.online != null ? +st.online : liveStats.online;
+    liveStats.inRooms = st.inRooms != null ? +st.inRooms : liveStats.inRooms;
+    liveStats.rooms = st.rooms != null ? +st.rooms : liveStats.rooms;
+    liveStats.public = st.public != null ? +st.public : liveStats.public;
+    if (st.lobby) liveStats.lobby = st.lobby;
+    if (st.servers) liveStats.lobby = st.servers;
+    if (st.theme) applySiteTheme(st.theme);
+    // only show live/fresh announces — empty string clears; ignore sticky re-broadcast spam
+    if (st.announce) showSiteAnnounce(st.announce, st.announceTs || st.ts, st.ttlMs);
+    else if (st.announce === "") hideSiteAnnounce(false);
+
+    var elN = document.getElementById("sb-online-count");
+    var elIR = document.getElementById("sb-online-inrooms");
+    var elR = document.getElementById("sb-online-rooms");
+    var elP = document.getElementById("sb-online-public");
+    if (elN) elN.textContent = String(liveStats.online);
+    if (elIR) elIR.textContent = String(liveStats.inRooms);
+    if (elR) elR.textContent = String(liveStats.rooms);
+    if (elP) elP.textContent = String(liveStats.public);
+
+    var vO = document.getElementById("sb-vault-online");
+    var vI = document.getElementById("sb-vault-inrooms");
+    var vR = document.getElementById("sb-vault-rooms");
+    var vP = document.getElementById("sb-vault-public");
+    if (vO) vO.textContent = String(liveStats.online);
+    if (vI) vI.textContent = String(liveStats.inRooms);
+    if (vR) vR.textContent = String(liveStats.rooms);
+    if (vP) vP.textContent = String(liveStats.public);
+  }
+
+  function showSevenFab(show) {
+    var fab = document.getElementById("sb-seven-fab");
+    if (!fab) return;
+    if (show) fab.classList.add("sb-show");
+    else fab.classList.remove("sb-show");
+  }
+
+  function openSevenPanel(open) {
+    var vault = document.getElementById("sb-seven-vault");
+    if (!vault) return;
+    if (open) vault.classList.add("sb-show");
+    else vault.classList.remove("sb-show");
+  }
+
+  function showSevenVault(show) {
+    // show = seven session active (fab visible). Panel opens separately.
+    var vault = document.getElementById("sb-seven-vault");
+    if (!show) {
+      showSevenFab(false);
+      openSevenPanel(false);
+      if (vault) vault.classList.remove("sb-unlocked");
+      sevenVaultUnlocked = false;
+      var dobBox = document.getElementById("sb-seven-dob-box");
+      if (dobBox) dobBox.classList.remove("sb-show");
+      return;
+    }
+    showSevenFab(true);
+  }
+
+  function unlockSevenVault() {
+    sevenVaultUnlocked = true;
+    var vault = document.getElementById("sb-seven-vault");
+    if (vault) vault.classList.add("sb-unlocked");
+    var dobBox = document.getElementById("sb-seven-dob-box");
+    if (dobBox) dobBox.classList.remove("sb-show");
+    openSevenPanel(true);
+    updateOnlineUi(liveStats);
+    sendAdmin("admin_list");
+    try {
+      if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "stats" }));
+    } catch (e) {}
+    setStatus("Owner panel unlocked", "on");
+  }
+
+  function setupSevenVault() {
+    if (window._sbSevenVault) return;
+    window._sbSevenVault = true;
+
+    var fab = document.getElementById("sb-seven-fab");
+    var vault = document.getElementById("sb-seven-vault");
+    var dragHead = document.getElementById("sb-vault-drag");
+    var btnMin = document.getElementById("sb-vault-min");
+    var btnCloseUi = document.getElementById("sb-vault-close-ui");
+
+    if (fab) {
+      fab.addEventListener("click", function () {
+        if (!isSevenSession()) return;
+        var open = vault && vault.classList.contains("sb-show");
+        openSevenPanel(!open);
+        // if locked, ensure DOB flow is ready
+        if (!sevenVaultUnlocked) {
+          openSevenPanel(true);
+        }
+      });
+    }
+    if (btnMin) {
+      btnMin.addEventListener("click", function (e) {
+        e.stopPropagation();
+        openSevenPanel(false);
+      });
+    }
+    if (btnCloseUi) {
+      btnCloseUi.addEventListener("click", function (e) {
+        e.stopPropagation();
+        openSevenPanel(false);
+      });
+    }
+
+    // drag floating panel
+    if (dragHead && vault) {
+      var dragging = false, ox = 0, oy = 0, sx = 0, sy = 0;
+      dragHead.addEventListener("pointerdown", function (e) {
+        if (e.button != null && e.button !== 0) return;
+        if (e.target && e.target.closest && e.target.closest(".sb-vault-head-actions")) return;
+        dragging = true;
+        var r = vault.getBoundingClientRect();
+        ox = e.clientX;
+        oy = e.clientY;
+        sx = r.left;
+        sy = r.top;
+        try { dragHead.setPointerCapture(e.pointerId); } catch (err) {}
+        e.preventDefault();
+      });
+      window.addEventListener("pointermove", function (e) {
+        if (!dragging) return;
+        var nx = sx + (e.clientX - ox);
+        var ny = sy + (e.clientY - oy);
+        nx = Math.max(8, Math.min(window.innerWidth - 80, nx));
+        ny = Math.max(8, Math.min(window.innerHeight - 80, ny));
+        vault.style.left = nx + "px";
+        vault.style.top = ny + "px";
+        vault.style.right = "auto";
+        vault.style.bottom = "auto";
+      });
+      window.addEventListener("pointerup", function () { dragging = false; });
+    }
+
+    var btn = document.getElementById("sb-seven-verify-btn");
+    var dobBox = document.getElementById("sb-seven-dob-box");
+    var dobIn = document.getElementById("sb-seven-dob-input");
+    var dobGo = document.getElementById("sb-seven-dob-go");
+    var dobErr = document.getElementById("sb-seven-dob-err");
+    if (btn) {
+      btn.addEventListener("click", function () {
+        if (!isSevenSession()) {
+          setStatus("Not available", "err");
+          return;
+        }
+        if (dobBox) dobBox.classList.add("sb-show");
+        if (dobErr) dobErr.classList.remove("sb-show");
+        if (dobIn) {
+          dobIn.value = "";
+          setTimeout(function () { try { dobIn.focus(); } catch (e) {} }, 50);
+        }
+      });
+    }
+    function tryDob() {
+      if (!isSevenSession()) return;
+      var ans = normalizeDob(dobIn && dobIn.value);
+      if (ans === SEVEN_DOB) {
+        if (dobErr) dobErr.classList.remove("sb-show");
+        unlockSevenVault();
+      } else {
+        if (dobErr) dobErr.classList.add("sb-show");
+        setStatus("DOB check failed", "err");
+      }
+    }
+    if (dobGo) dobGo.addEventListener("click", tryDob);
+    if (dobIn) {
+      dobIn.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") tryDob();
+      });
+    }
+
+    // Theme buttons
+    var themes = document.getElementById("sb-vault-themes");
+    if (themes) {
+      themes.addEventListener("click", function (e) {
+        var t = e.target && e.target.getAttribute && e.target.getAttribute("data-theme");
+        if (!t) return;
+        sendAdmin("admin_set_theme", { theme: t });
+      });
+    }
+
+    var annGo = document.getElementById("sb-vault-announce-go");
+    var annClear = document.getElementById("sb-vault-announce-clear");
+    var annIn = document.getElementById("sb-vault-announce");
+    if (annGo) {
+      annGo.addEventListener("click", function () {
+        sendAdmin("admin_announce", { text: (annIn && annIn.value) || "" });
+      });
+    }
+    if (annClear) {
+      annClear.addEventListener("click", function () {
+        if (annIn) annIn.value = "";
+        sendAdmin("admin_announce", { text: "" });
+      });
+    }
+
+    var ref = document.getElementById("sb-vault-refresh-admin");
+    if (ref) ref.addEventListener("click", function () { sendAdmin("admin_list"); });
+
+    var kickBtn = document.getElementById("sb-vault-kick");
+    if (kickBtn) {
+      kickBtn.addEventListener("click", function () {
+        var target = (document.getElementById("sb-vault-kick-target") || {}).value || "";
+        var room = (document.getElementById("sb-vault-kick-room") || {}).value || "";
+        if (!target) { setStatus("Pick a player to kick", "err"); return; }
+        if (!confirm("Kick " + target + (room ? " from " + room : "") + "?")) return;
+        sendAdmin("admin_kick", { target: target, room: room, reason: "Removed by seven" });
+      });
+    }
+    var closeBtn = document.getElementById("sb-vault-close");
+    if (closeBtn) {
+      closeBtn.addEventListener("click", function () {
+        var room = (document.getElementById("sb-vault-close-room") || {}).value || "";
+        if (!room) { setStatus("Pick a room to close", "err"); return; }
+        if (!confirm("Close room " + room + " for everyone?")) return;
+        sendAdmin("admin_close_room", { room: room, reason: "Room closed by seven" });
+      });
+    }
+    var roleGo = document.getElementById("sb-vault-role-go");
+    if (roleGo) {
+      roleGo.addEventListener("click", function () {
+        var target = (document.getElementById("sb-vault-role-target") || {}).value || "";
+        var room = (document.getElementById("sb-vault-role-room") || {}).value || "";
+        var role = (document.getElementById("sb-vault-role-val") || {}).value || "view";
+        if (!target || !room) { setStatus("Pick player + room for role", "err"); return; }
+        sendAdmin("admin_set_role", { target: target, room: room, role: role });
+      });
+    }
+  }
+
+  function refreshSevenVaultVisibility() {
+    setupSevenVault();
+    if (isSevenSession()) {
+      showSevenVault(true);
+    } else {
+      showSevenVault(false);
+    }
+  }
+
+  function isBrowserHost() {
+    // Permanent hosted site (https) vs raw file / odd schemes
+    return location.protocol === "http:" || location.protocol === "https:";
+  }
+  function isRemoteHost() {
+    var h = (location.hostname || "").toLowerCase();
+    return isBrowserHost() && h && h !== "localhost" && h !== "127.0.0.1" && h !== "[::1]";
+  }
+  function roomFromUrl() {
+    try {
+      var u = new URL(location.href);
+      var q = (u.searchParams.get("room") || u.searchParams.get("code") || "").trim();
+      if (q) return q.toUpperCase().replace(/\s+/g, "");
+      var hash = (u.hash || "").replace(/^#/, "");
+      if (/^room=/i.test(hash)) return hash.split("=")[1].toUpperCase().replace(/\s+/g, "");
+      if (/^[A-Z0-9]{4,6}$/i.test(hash)) return hash.toUpperCase();
+    } catch (e) {}
+    return "";
+  }
+  function inviteUrl(code) {
+    var u = new URL(location.href);
+    u.searchParams.set("room", String(code || room || "").toUpperCase());
+    // clean hash noise
+    u.hash = "";
+    return u.toString();
+  }
   function wsUrl() {
-    // One public app URL for everyone. Join = code or public list (not "share my Wi‑Fi link").
-    // Optional override: ?hub=wss://your-host/ws  or localStorage.sevenbox_hub
+    // Same-origin always on the permanent host. Optional dev override only.
     try {
       var q = new URL(location.href).searchParams.get("hub");
       if (q) return q;
@@ -182,9 +660,8 @@ try {
     if (typeof window.SEVENBOX_HUB === "string" && window.SEVENBOX_HUB) {
       return window.SEVENBOX_HUB;
     }
-    var u = new URL(location.href);
-    if (u.protocol === "http:" || u.protocol === "https:") {
-      return (u.protocol === "https:" ? "wss:" : "ws:") + "//" + u.host + "/ws";
+    if (isBrowserHost()) {
+      return (location.protocol === "https:" ? "wss:" : "ws:") + "//" + location.host + "/ws";
     }
     return "ws://127.0.0.1:8765/ws";
   }
@@ -333,8 +810,9 @@ try {
         if (!tryCommitName(n, key, true)) return;
         if (nameLooksLikeSeven(n) && key === SEVEN_KEY) sessionSevenKey = key;
         if (gate) gate.classList.add("sb-hide");
-        setStatus("Hey " + normalizeName(n) + " — host or join a server", "");
-        ensureLobby();
+        setStatus("Hey " + normalizeName(n) + " — host or join a room", "");
+        refreshSevenVaultVisibility();
+        ensureLobby(function () { tryAutoJoinFromUrl(); });
       });
     }
     if (nameEl) {
@@ -370,9 +848,32 @@ try {
     return "";
   }
   function currentChannel() {
-    try { var d = doc(); if (d && typeof d.channel === "number") return d.channel; } catch (e) {}
+    try {
+      var d = doc();
+      if (!d) return 0;
+      var ch = null;
+      if (typeof d.channel === "number" && !isNaN(d.channel)) ch = d.channel;
+      else if (d.selection && typeof d.selection.channel === "number") ch = d.selection.channel;
+      else if (d.synth && typeof d.synth.channel === "number") ch = d.synth.channel;
+      if (ch == null && typeof editor !== "undefined" && editor && editor.doc) {
+        var ed = editor.doc;
+        if (typeof ed.channel === "number") ch = ed.channel;
+      }
+      if (ch == null) return 0;
+      ch = ch | 0;
+      if (ch < 0) ch = 0;
+      // clamp to song channel count when available
+      try {
+        if (d.song && typeof d.song.getChannelCount === "function") {
+          var n = d.song.getChannelCount();
+          if (n > 0 && ch >= n) ch = n - 1;
+        }
+      } catch (e2) {}
+      return ch;
+    } catch (e) {}
     return 0;
   }
+  var lastLocalChannel = -1;
   function currentBar() {
     try { var d = doc(); if (d && typeof d.bar === "number") return d.bar; } catch (e) {}
     return 0;
@@ -401,115 +902,309 @@ try {
     if (!layer) {
       layer = document.createElement("div");
       layer.id = "sb-cursor-layer";
+      // sit on top of editor UI; size follows container via CSS inset
       box.appendChild(layer);
     }
+    // If BeepBox re-parented DOM, keep layer last so it stays on top
+    try {
+      if (layer.parentNode === box && box.lastChild !== layer) {
+        box.appendChild(layer);
+      }
+    } catch (e2) {}
     return layer;
   }
 
-  // Smooth remote cursors: target from network, display lerps each frame
-  var cursorTargets = {};  // name -> {x,y,channel,color,inside,same,el}
+  // Remote cursors: glide along network samples (not rubber-band chase — that feels "weird")
+  var cursorTargets = {};
   var cursorRaf = 0;
+  var cursorLayerSize = { w: 1, h: 1 };
+  // How long to ease between two network points (ms). ~ packet interval.
+  var CURSOR_SEG_MS = 90;
+  // Mild coast past last sample if next packet is late (fraction of seg)
+  var CURSOR_COAST = 0.35;
+
+  function measureCursorLayer() {
+    // Use the VISIBLE editor box size (clientWidth), not scrollWidth — avoids huge right gap
+    var box = document.getElementById("beepboxEditorContainer");
+    if (box) {
+      var w = box.clientWidth || 0;
+      var h = box.clientHeight || 0;
+      if (w > 1) cursorLayerSize.w = w;
+      if (h > 1) cursorLayerSize.h = h;
+      return cursorLayerSize;
+    }
+    var layer = ensureCursorLayer();
+    if (!layer) return cursorLayerSize;
+    var r = layer.getBoundingClientRect();
+    if (r.width > 1) cursorLayerSize.w = r.width;
+    if (r.height > 1) cursorLayerSize.h = r.height;
+    return cursorLayerSize;
+  }
 
   function bindPointerTrack() {
-    var box = document.getElementById("beepboxEditorContainer");
-    if (!box || box._sbPtrTrack) return;
-    box._sbPtrTrack = true;
+    if (window._sbPtrTrack) return;
+    window._sbPtrTrack = true;
     var upd = function (e) {
       try {
+        var box = document.getElementById("beepboxEditorContainer");
+        if (!box) return;
         var r = box.getBoundingClientRect();
         if (!r.width || !r.height) return;
-        pointerState.x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
-        pointerState.y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+        var x = (e.clientX - r.left) / r.width;
+        var y = (e.clientY - r.top) / r.height;
+        var inside = x >= 0 && x <= 1 && y >= 0 && y <= 1;
+        if (!inside) {
+          if (pointerState.inside) {
+            pointerState.inside = false;
+            if (room) sendPresence(true);
+          }
+          return;
+        }
+        pointerState.x = Math.max(0, Math.min(1, x));
+        pointerState.y = Math.max(0, Math.min(1, y));
         pointerState.inside = true;
-        // push presence a bit faster while moving
-        if (room) sendPresence();
+        if (room) sendPresence(false);
       } catch (err) {}
     };
-    box.addEventListener("pointermove", upd, { capture: true, passive: true });
-    box.addEventListener("pointerdown", upd, { capture: true, passive: true });
-    box.addEventListener("pointerenter", function (e) {
-      pointerState.inside = true;
-      upd(e);
-    }, true);
-    box.addEventListener("pointerleave", function () {
-      pointerState.inside = false;
-      if (room) sendPresence();
-    }, true);
+    document.addEventListener("pointermove", upd, { capture: true, passive: true });
+    document.addEventListener("pointerdown", upd, { capture: true, passive: true });
   }
 
   function ensureCursorEl(name, color) {
     var layer = ensureCursorLayer();
     if (!layer) return null;
-    var id = "sb-cur-" + name.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 24);
+    var safe = String(name).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
+    var id = "sb-cur-" + safe;
     var el = document.getElementById(id);
     if (!el) {
       el = document.createElement("div");
       el.id = id;
       el.className = "sb-remote-cursor";
       el.innerHTML =
-        '<div class="sb-cur-ghost"></div>' +
         '<div class="sb-cur-arrow"></div>' +
-        '<div class="sb-cur-label"><span></span></div>';
+        '<div class="sb-cur-label"><span class="sb-cur-name"></span><span class="sb-cur-ch">0</span></div>';
+      layer.appendChild(el);
+    } else if (el.parentNode !== layer) {
       layer.appendChild(el);
     }
-    el.style.color = color;
-    var lab = el.querySelector(".sb-cur-label span");
-    if (lab) lab.textContent = name || "?";
+    // drop old crosshair markup → simple arrow
+    if (!el.querySelector(".sb-cur-arrow") || el.querySelector(".sb-cur-hline")) {
+      el.innerHTML =
+        '<div class="sb-cur-arrow"></div>' +
+        '<div class="sb-cur-label"><span class="sb-cur-name"></span><span class="sb-cur-ch">0</span></div>';
+    }
+    var line = color || "#ff5ec8";
+    el.style.setProperty("--line", line);
+    el.style.color = line;
+    var nm = el.querySelector(".sb-cur-name");
+    if (nm) nm.textContent = name || "?";
     return el;
+  }
+
+  function ensureTrackLineEl(name, color) {
+    var layer = ensureCursorLayer();
+    if (!layer) return null;
+    var safe = String(name).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
+    var id = "sb-trk-" + safe;
+    var el = document.getElementById(id);
+    if (!el) {
+      el = document.createElement("div");
+      el.id = id;
+      el.className = "sb-track-line";
+      el.innerHTML =
+        '<div class="sb-track-tag"><span class="sb-cur-name"></span><span class="sb-cur-ch">0</span></div>';
+      layer.appendChild(el);
+    } else if (el.parentNode !== layer) {
+      layer.appendChild(el);
+    }
+    var line = color || "#ff5ec8";
+    el.style.setProperty("--line", line);
+    var nm = el.querySelector(".sb-cur-name");
+    if (nm) nm.textContent = name || "?";
+    return el;
+  }
+
+  // BeepBox track rows = .channelRow (height patternHeight=28). Position pink bar on selected track.
+  // Layer is the *visible* editor box — use viewport-relative rects only (no scrollLeft/Top double-count).
+  function measureChannelTrackRect(channel) {
+    var box = document.getElementById("beepboxEditorContainer");
+    if (!box) return null;
+    var ch = (channel | 0);
+    if (ch < 0) ch = 0;
+    var boxRect = box.getBoundingClientRect();
+    if (boxRect.width < 2 || boxRect.height < 2) return null;
+
+    function visRect(el, fullWidthEl) {
+      if (!el) return null;
+      var r = el.getBoundingClientRect();
+      var wEl = fullWidthEl || el;
+      var wr = wEl.getBoundingClientRect();
+      // clip to visible editor area
+      var top = r.top - boxRect.top;
+      var left = wr.left - boxRect.left;
+      var height = Math.max(r.height, 22);
+      var width = Math.max(wr.width, 80);
+      // hide if fully scrolled out of view
+      if (top + height < 0 || top > boxRect.height) return null;
+      if (left + width < 0 || left > boxRect.width) return null;
+      return {
+        left: Math.max(0, left),
+        top: top,
+        width: Math.min(width, boxRect.width - Math.max(0, left) + 4),
+        height: height
+      };
+    }
+
+    // Prefer mute column buttons / channel rows — exact row under numbers 0,1,2,3…
+    var mute = box.querySelector(".muteEditor");
+    var trackArea = box.querySelector(".trackAndMuteContainer") || (mute && mute.parentNode);
+    if (mute && mute.children && mute.children.length) {
+      var btn = mute.children[ch];
+      if (btn) {
+        var m = visRect(btn, trackArea || mute);
+        if (m) return m;
+      }
+    }
+    var rows = box.querySelectorAll(".channelRow");
+    if (rows && rows[ch]) {
+      var m2 = visRect(rows[ch], trackArea || rows[ch]);
+      if (m2) return m2;
+    }
+    // fallback estimate (BeepBox Es.patternHeight = 28) — only if row DOM missing
+    var PH = 28;
+    var trackRoot = trackArea || box.querySelector(".beepboxEditor");
+    if (!trackRoot) return null;
+    var rootR = trackRoot.getBoundingClientRect();
+    var topEst = (rootR.top - boxRect.top) + ch * PH;
+    if (topEst + PH < 0 || topEst > boxRect.height) return null;
+    return {
+      left: Math.max(0, rootR.left - boxRect.left),
+      top: topEst,
+      width: Math.max(rootR.width, 80),
+      height: PH
+    };
+  }
+
+  function tagStackOffset(name, channel, allTargets, myName) {
+    // stagger labels when several people sit on the same track
+    var ch = channel | 0;
+    var idx = 0;
+    var names = Object.keys(allTargets || {});
+    for (var i = 0; i < names.length; i++) {
+      var n = names[i];
+      if (n === myName) continue;
+      var t = allTargets[n];
+      if (!t) continue;
+      var c = (typeof t.channel === "number" && !isNaN(t.channel)) ? (t.channel | 0) : 0;
+      if (c !== ch) continue;
+      if (n === name) return idx;
+      idx++;
+    }
+    return 0;
+  }
+
+  function updateCursorLabel(el, name, channel, same) {
+    if (!el) return;
+    var nm = el.querySelector(".sb-cur-name");
+    var ch = el.querySelector(".sb-cur-ch");
+    var chN = (typeof channel === "number" && !isNaN(channel)) ? (channel | 0) : 0;
+    if (chN < 0) chN = 0;
+    // BeepBox channel numbers are 0-based in the UI (0,1,2,3…)
+    if (nm) nm.textContent = name || "?";
+    if (ch) ch.textContent = String(chN);
+    el.title = (name || "?") + " · track " + chN + (same ? " · same as you" : "");
+  }
+
+  function easeOutQuad(u) {
+    return 1 - (1 - u) * (1 - u);
   }
 
   function startCursorAnim() {
     if (cursorRaf) return;
-    var tick = function () {
+    var tick = function (nowStamp) {
       cursorRaf = requestAnimationFrame(tick);
+      var now = nowStamp || (performance.now ? performance.now() : Date.now());
+      var size = measureCursorLayer();
       var myCh = currentChannel();
       var myName = getName();
-      var seen = {};
       var names = Object.keys(cursorTargets);
       for (var i = 0; i < names.length; i++) {
         var name = names[i];
         var t = cursorTargets[name];
         if (!t || name === myName) continue;
-        seen[name] = true;
-        if (!t.inside || t.x == null || t.y == null) {
-          if (t.el) t.el.style.display = "none";
-          continue;
-        }
-        // lerp display toward target (smooth, less glitchy)
-        if (t.dx == null) { t.dx = t.x; t.dy = t.y; }
-        var ease = 0.45; // responsive but smooth
-        t.dx += (t.x - t.dx) * ease;
-        t.dy += (t.y - t.dy) * ease;
-        // snap if very close
-        if (Math.abs(t.x - t.dx) < 0.002) t.dx = t.x;
-        if (Math.abs(t.y - t.dy) < 0.002) t.dy = t.y;
 
+        var chN = (typeof t.channel === "number" && !isNaN(t.channel)) ? (t.channel | 0) : 0;
+        if (chN < 0) chN = 0;
+        var same = chN === (myCh | 0);
+
+        // Pink track-selection bar always follows their channel (arrow keys left/right), not mouse
+        var trEl = t.trackEl || ensureTrackLineEl(name, t.color);
+        t.trackEl = trEl;
+        if (trEl) {
+          var rect = measureChannelTrackRect(chN);
+          if (rect) {
+            trEl.style.display = "block";
+            trEl.style.left = rect.left + "px";
+            trEl.style.top = rect.top + "px";
+            trEl.style.width = rect.width + "px";
+            trEl.style.height = rect.height + "px";
+            trEl.style.setProperty("--line", t.color || "#ff5ec8");
+            // same channel as you → ghostly; other tracks → solid
+            if (same) {
+              trEl.classList.add("same-ch");
+              trEl.classList.remove("dim-ch");
+            } else {
+              trEl.classList.remove("same-ch");
+              trEl.classList.add("dim-ch");
+            }
+            updateCursorLabel(trEl, name, chN, same);
+            var tag = trEl.querySelector(".sb-track-tag");
+            if (tag) {
+              var stack = tagStackOffset(name, chN, cursorTargets, myName);
+              tag.style.left = (4 + stack * 72) + "px";
+            }
+          } else {
+            trEl.style.display = "none";
+          }
+        }
+
+        // Simple arrow cursor only when their mouse is over the editor
         var el = t.el || ensureCursorEl(name, t.color);
         t.el = el;
         if (!el) continue;
+        if (!t.inside || t.toX == null || t.toY == null || isNaN(t.toX) || isNaN(t.toY)) {
+          el.style.display = "none";
+          continue;
+        }
+
+        var elapsed = now - (t.segStart || now);
+        var u = elapsed / (t.segMs || CURSOR_SEG_MS);
+        var x, y;
+        if (u <= 1) {
+          var e = easeOutQuad(Math.max(0, Math.min(1, u)));
+          x = t.fromX + (t.toX - t.fromX) * e;
+          y = t.fromY + (t.toY - t.fromY) * e;
+        } else {
+          var coast = Math.min(CURSOR_COAST, u - 1);
+          x = t.toX + (t.toX - t.fromX) * coast * 0.25;
+          y = t.toY + (t.toY - t.fromY) * coast * 0.25;
+          x = Math.max(0, Math.min(1, x));
+          y = Math.max(0, Math.min(1, y));
+        }
+        t.dx = x;
+        t.dy = y;
+
         el.style.display = "block";
-        el.style.left = (t.dx * 100) + "%";
-        el.style.top = (t.dy * 100) + "%";
-        var same = (typeof t.channel === "number" && t.channel === myCh);
-        if (same) el.classList.add("same-ch");
-        else el.classList.remove("same-ch");
-        el.title = name + " · ch" + ((t.channel || 0) + 1) + (same ? " (same channel)" : "");
-      }
-      // hide removed
-      var layer = document.getElementById("sb-cursor-layer");
-      if (layer) {
-        var kids = layer.children;
-        for (var k = kids.length - 1; k >= 0; k--) {
-          var id = kids[k].id || "";
-          var n = id.replace(/^sb-cur-/, "");
-          // map back is lossy; track by dataset
+        el.style.left = (x * size.w) + "px";
+        el.style.top = (y * size.h) + "px";
+        if (same) {
+          el.classList.add("same-ch");
+          el.classList.remove("dim-ch");
+        } else {
+          el.classList.remove("same-ch");
+          el.classList.add("dim-ch");
         }
-      }
-      // prune targets not in peers
-      for (var j = 0; j < names.length; j++) {
-        if (!seen[names[j]] && cursorTargets[names[j]]) {
-          // keep until explicitly removed in renderPeers
-        }
+        updateCursorLabel(el, name, chN, same);
       }
     };
     cursorRaf = requestAnimationFrame(tick);
@@ -523,38 +1218,103 @@ try {
     if (layer) layer.innerHTML = "";
   }
 
+  function setCursorSample(cur, nx, ny, now) {
+    // start a new glide segment from where we currently are
+    var fx = cur.dx != null ? cur.dx : (cur.toX != null ? cur.toX : nx);
+    var fy = cur.dy != null ? cur.dy : (cur.toY != null ? cur.toY : ny);
+    var dist = Math.abs(nx - fx) + Math.abs(ny - fy);
+    // big jump (teleport / first packet) → snap
+    if (dist > 0.4 || cur.toX == null) {
+      cur.fromX = nx;
+      cur.fromY = ny;
+      cur.toX = nx;
+      cur.toY = ny;
+      cur.dx = nx;
+      cur.dy = ny;
+      cur.segStart = now;
+      cur.segMs = 1;
+      return;
+    }
+    // ignore microscopic noise
+    if (dist < 0.003) return;
+    cur.fromX = fx;
+    cur.fromY = fy;
+    cur.toX = nx;
+    cur.toY = ny;
+    cur.segStart = now;
+    // longer path if they moved farther; clamp for snappy feel
+    cur.segMs = Math.max(55, Math.min(130, CURSOR_SEG_MS + dist * 80));
+  }
+
   function renderCursors(list) {
     startCursorAnim();
     list = list || peers || [];
     var myName = getName();
     var live = {};
+    var now = performance.now ? performance.now() : Date.now();
     for (var i = 0; i < list.length; i++) {
       var p = list[i];
-      if (!p || p.name === myName) continue;
+      if (!p || !p.name || p.name === myName) continue;
       live[p.name] = true;
-      var color = PEER_COLORS[i % PEER_COLORS.length];
-      var prev = cursorTargets[p.name];
-      cursorTargets[p.name] = {
-        x: p.x != null ? +p.x : (prev && prev.x),
-        y: p.y != null ? +p.y : (prev && prev.y),
-        dx: prev && prev.dx != null ? prev.dx : (p.x != null ? +p.x : 0.5),
-        dy: prev && prev.dy != null ? prev.dy : (p.y != null ? +p.y : 0.5),
-        channel: p.channel,
-        inside: !!p.inside,
-        color: color,
-        el: prev && prev.el
-      };
-      if (!cursorTargets[p.name].el) {
-        cursorTargets[p.name].el = ensureCursorEl(p.name, color);
+      var color = peerColorFor(p.name, i);
+      var cur = cursorTargets[p.name];
+      var hasX = p.x != null && p.x !== "" && !isNaN(+p.x);
+      var hasY = p.y != null && p.y !== "" && !isNaN(+p.y);
+      var nx = hasX ? +p.x : null;
+      var ny = hasY ? +p.y : null;
+      var inside = hasX && hasY ? (p.inside !== false) : !!p.inside;
+      var pCh = (p.channel != null && p.channel !== "" && !isNaN(+p.channel)) ? (+p.channel | 0) : 0;
+      if (pCh < 0) pCh = 0;
+
+      if (!cur) {
+        cur = cursorTargets[p.name] = {
+          fromX: nx != null ? nx : 0.5,
+          fromY: ny != null ? ny : 0.5,
+          toX: nx != null ? nx : 0.5,
+          toY: ny != null ? ny : 0.5,
+          dx: nx != null ? nx : 0.5,
+          dy: ny != null ? ny : 0.5,
+          segStart: now,
+          segMs: 1,
+          channel: pCh,
+          inside: inside && nx != null && ny != null,
+          color: color,
+          el: ensureCursorEl(p.name, color),
+          trackEl: ensureTrackLineEl(p.name, color),
+          lastNx: nx,
+          lastNy: ny,
+          lastCh: pCh
+        };
+      } else {
+        // always refresh channel so track bar moves when they switch with arrows
+        cur.channel = pCh;
+        cur.color = color;
+        if (hasX && hasY) {
+          cur.inside = p.inside !== false;
+          if (cur.lastNx !== nx || cur.lastNy !== ny) {
+            setCursorSample(cur, nx, ny, now);
+            cur.lastNx = nx;
+            cur.lastNy = ny;
+          }
+        } else if (p.inside === false) {
+          cur.inside = false;
+        }
+        cur.lastCh = pCh;
+        if (!cur.el) cur.el = ensureCursorEl(p.name, color);
+        else {
+          cur.el.style.setProperty("--line", color);
+          cur.el.style.color = color;
+        }
+        if (!cur.trackEl) cur.trackEl = ensureTrackLineEl(p.name, color);
+        else cur.trackEl.style.setProperty("--line", color);
       }
     }
-    // remove peers who left
     Object.keys(cursorTargets).forEach(function (name) {
       if (!live[name]) {
         try {
-          if (cursorTargets[name].el && cursorTargets[name].el.parentNode) {
-            cursorTargets[name].el.parentNode.removeChild(cursorTargets[name].el);
-          }
+          var dead = cursorTargets[name];
+          if (dead.el && dead.el.parentNode) dead.el.parentNode.removeChild(dead.el);
+          if (dead.trackEl && dead.trackEl.parentNode) dead.trackEl.parentNode.removeChild(dead.trackEl);
         } catch (e) {}
         delete cursorTargets[name];
       }
@@ -607,6 +1367,27 @@ try {
   }
   function canEdit() { return myRole === "host" || myRole === "edit"; }
 
+  function syncMyRoleFromPeers(list) {
+    // Keep host/edit/view correct after host leaves or permissions change
+    if (!list || !list.length) return;
+    var me = getName();
+    for (var i = 0; i < list.length; i++) {
+      var p = list[i];
+      if (!p || p.name !== me) continue;
+      if (p.isHost) {
+        isHost = true;
+        myRole = "host";
+      } else {
+        isHost = false;
+        if (p.role && p.role !== "host") myRole = p.role;
+        else if (myRole === "host") myRole = "edit";
+      }
+      setConnectedUi(!!room);
+      setReadonlyUi(!canEdit());
+      return;
+    }
+  }
+
   // --- Reliable low-latency song sync (no pointermove spam, LWW timestamps) ---
   var localSeq = 0;
   var lastRemoteTs = 0;
@@ -617,7 +1398,8 @@ try {
   var lastPlayingSent = null;
 
 
-  function forceEditorRedraw() {
+  var lastForceRedraw = 0;
+  function forceEditorRedraw(heavy) {
     try {
       var d = doc();
       if (d && d.notifier && d.notifier.changed) d.notifier.changed();
@@ -626,12 +1408,13 @@ try {
       if (typeof editor !== "undefined" && editor) {
         if (typeof editor.whenUpdated === "function") editor.whenUpdated();
         if (typeof editor.updatePlayButton === "function") editor.updatePlayButton();
-        // poke layout
-        if (editor.container) {
-          var _ = editor.container.offsetHeight;
-        }
       }
     } catch (e1) {}
+    // layout poke is expensive — only when needed (wake / hard resync)
+    if (!heavy) return;
+    var now = Date.now();
+    if (now - lastForceRedraw < 200) return;
+    lastForceRedraw = now;
     try {
       var box = document.getElementById("beepboxEditorContainer");
       if (box) {
@@ -660,6 +1443,25 @@ try {
     var d = doc();
     if (!d || !d.song) return;
 
+    // Preserve scroll + play position — setSong() resets playhead to 0 otherwise
+    var savedBarScroll = 0;
+    var savedChScroll = 0;
+    var savedBar = 0;
+    var savedCh = 0;
+    var savedPlaying = false;
+    var savedPlayhead = 0;
+    try {
+      savedBarScroll = d.barScrollPos || 0;
+      savedChScroll = d.channelScrollPos || 0;
+      savedBar = typeof d.bar === "number" ? d.bar : 0;
+      savedCh = typeof d.channel === "number" ? d.channel : 0;
+      if (d.synth) {
+        savedPlaying = !!d.synth.playing;
+        if (typeof d.synth.playhead === "number") savedPlayhead = d.synth.playhead;
+        else savedPlayhead = savedBar;
+      }
+    } catch (eS) {}
+
     if (ts) lastRemoteTs = ts;
     applyingRemote = true;
     lastApplied = b64;
@@ -671,10 +1473,37 @@ try {
           try { d.synth.setSong(b64); } catch (e2) {}
         }
       }
+      try {
+        if (typeof d.barScrollPos === "number") d.barScrollPos = savedBarScroll;
+        if (typeof d.channelScrollPos === "number") d.channelScrollPos = savedChScroll;
+        if (typeof d.channel === "number") d.channel = savedCh;
+        if (typeof d.bar === "number") d.bar = savedBar;
+        // restore playhead so note sync doesn't yank to beat 1
+        if (d.synth) {
+          var restoreBar = Math.max(0, Math.floor(savedPlayhead) | 0);
+          try {
+            if (typeof d.synth.goToBar === "function") d.synth.goToBar(restoreBar);
+            else if (typeof d.synth.bar === "number") d.synth.bar = restoreBar;
+            if (typeof d.synth.snapToBar === "function") d.synth.snapToBar();
+          } catch (eBar) {}
+          try {
+            // some builds expose playheadInternal
+            if ("playhead" in d.synth) d.synth.playhead = savedPlayhead;
+            if ("playheadInternal" in d.synth) d.synth.playheadInternal = savedPlayhead;
+          } catch (ePh) {}
+          if (savedPlaying) {
+            applyingTransport = true;
+            try {
+              if (!d.synth.playing) startLocalPlay(d);
+            } catch (ePl) {}
+            setTimeout(function () { applyingTransport = false; }, 50);
+          }
+        }
+      } catch (eRest) {}
       if (d.notifier && d.notifier.changed) d.notifier.changed();
-      forceEditorRedraw();
+      forceEditorRedraw(!!force);
     } catch (e) { console.warn("applySong", e); }
-    setTimeout(function () { applyingRemote = false; }, 20);
+    setTimeout(function () { applyingRemote = false; }, 16);
   }
 
   function flushPendingRemote() {
@@ -692,14 +1521,20 @@ try {
       var d = doc();
       if (!d || !d.synth) return null;
       var playing = !!d.synth.playing;
-      var bar = 0;
-      try { bar = typeof d.bar === "number" ? d.bar : (d.synth.bar || 0); } catch (e) {}
       var playhead = 0;
       try {
-        playhead = typeof d.synth.playhead === "number" ? d.synth.playhead : bar;
+        playhead = typeof d.synth.playhead === "number" ? d.synth.playhead : 0;
       } catch (e2) {
-        playhead = bar;
+        playhead = 0;
       }
+      var bar = 0;
+      try {
+        // prefer playhead bar so we never advertise "bar 0" while mid-song
+        if (playing && playhead > 0) bar = Math.floor(playhead) | 0;
+        else if (typeof d.bar === "number") bar = d.bar | 0;
+        else if (typeof d.synth.bar === "number") bar = d.synth.bar | 0;
+        else bar = Math.floor(playhead) | 0;
+      } catch (e) {}
       return { playing: playing, bar: bar|0, playhead: +playhead || 0 };
     } catch (e) {
       return null;
@@ -713,70 +1548,95 @@ try {
     return (t.playing ? "1" : "0") + ":" + (t.bar|0) + ":" + ph;
   }
 
+  function snapTransportToBar(d, bar) {
+    bar = bar|0;
+    try {
+      if (bar <= 0 && typeof d.synth.snapToStart === "function") {
+        d.synth.snapToStart();
+      } else {
+        if (typeof d.synth.goToBar === "function") d.synth.goToBar(bar);
+        else if (typeof d.synth.bar === "number") d.synth.bar = bar;
+        if (typeof d.synth.snapToBar === "function") d.synth.snapToBar();
+      }
+    } catch (e0) {}
+    try { if (typeof d.bar === "number") d.bar = bar; } catch (e1) {}
+  }
+
+  function startLocalPlay(d) {
+    resumeAllAudio();
+    try {
+      if (d.performance && typeof d.performance.play === "function") {
+        d.performance.play();
+      } else if (typeof d.synth.play === "function") {
+        d.synth.play();
+      }
+    } catch (e3) { console.warn("remote play", e3); }
+  }
+
+  function stopLocalPlay(d) {
+    try {
+      if (d.performance && typeof d.performance.pause === "function") d.performance.pause();
+      else if (typeof d.synth.pause === "function") d.synth.pause();
+    } catch (e4) { console.warn("remote pause", e4); }
+  }
+
   function applyTransport(msg, force) {
     if (!msg) return;
-    // Play/stop always apply; only ignore idle bar nudges while placing notes
+    var now = Date.now();
+    var msgTs = msg.ts ? +msg.ts : 0;
+    // Drop stale / out-of-order packets
+    if (msgTs && lastTransportTs && msgTs < lastTransportTs - 5) return;
+    if (!force && now < transportHoldUntil && msgTs && msgTs <= lastTransportTs) return;
+
     var wantPlayEarly = !!msg.playing;
     var dEarly = doc();
     var isPlayingEarly = dEarly && dEarly.synth ? !!dEarly.synth.playing : false;
     var isEdge = wantPlayEarly !== isPlayingEarly;
-    if (localInteract && !force && !isEdge) return;
-    var key = transportKey(msg);
-    // For playhead-only updates while already in same play state, skip (local clock runs)
+    var isRestart = !!(msg.restart || msg.snap || force === "restart");
+    if (localInteract && !force && !isEdge && !isRestart) return;
     var d = doc();
     if (!d || !d.synth) return;
 
     var wantPlay = !!msg.playing;
     var isPlaying = !!d.synth.playing;
-    var bar = msg.bar|0;
+    var bar = msg.bar != null ? (msg.bar|0) : 0;
 
-    // Same play state + already playing → do NOTHING to playhead (prevents freeze/jitter)
-    if (!force && wantPlay && isPlaying && lastPlayingSent === true) {
-      return;
-    }
-    // Same idle state
-    if (!force && !wantPlay && !isPlaying && key === lastTransportApplied) {
+    // Same play state → NEVER seek (this was randomly sending people to bar 1)
+    if (!isRestart && wantPlay === isPlaying) {
+      if (msgTs) lastTransportTs = Math.max(lastTransportTs, msgTs);
+      lastPlayingSent = wantPlay;
       return;
     }
 
     applyingTransport = true;
-    lastTransportApplied = key;
-    lastTransportSent = key;
+    if (msgTs) lastTransportTs = Math.max(lastTransportTs, msgTs);
+    else lastTransportTs = now;
     lastPlayingSent = wantPlay;
+    if (isEdge || isRestart) transportHoldUntil = now + 280;
+
     try {
-      if (wantPlay && !isPlaying) {
-        // Start local playback from bar — then let THIS device advance playhead itself
+      if (isRestart) {
         resumeAllAudio();
-        try {
-          if (typeof d.synth.goToBar === "function") d.synth.goToBar(bar);
-          else if (typeof d.synth.bar === "number") d.synth.bar = bar;
-        } catch (e0) {}
-        try { if (typeof d.bar === "number") d.bar = bar; } catch (e1) {}
-        try {
-          if (d.performance && typeof d.performance.play === "function") {
-            try { if (typeof d.synth.snapToBar === "function") d.synth.snapToBar(); } catch (e2) {}
-            d.performance.play();
-          } else if (typeof d.synth.play === "function") {
-            d.synth.play();
+        snapTransportToBar(d, bar|0);
+        if (wantPlay) {
+          if (!isPlaying) startLocalPlay(d);
+          else {
+            try { if (typeof d.synth.snapToBar === "function") d.synth.snapToBar(); } catch (eR) {}
           }
-        } catch (e3) { console.warn("remote play", e3); }
+        } else if (isPlaying) {
+          stopLocalPlay(d);
+          snapTransportToBar(d, bar|0);
+        }
+      } else if (wantPlay && !isPlaying) {
+        // Play edge only: start from the bar the host was on (not always 0)
+        resumeAllAudio();
+        if (msg.bar != null) snapTransportToBar(d, bar);
+        startLocalPlay(d);
       } else if (!wantPlay && isPlaying) {
-        try {
-          if (d.performance && typeof d.performance.pause === "function") d.performance.pause();
-          else if (typeof d.synth.pause === "function") d.synth.pause();
-        } catch (e4) { console.warn("remote pause", e4); }
-        try {
-          if (typeof d.synth.goToBar === "function") d.synth.goToBar(bar);
-          if (typeof d.bar === "number") d.bar = bar;
-        } catch (e5) {}
-      } else if (!wantPlay && !isPlaying) {
-        // idle bar follow only
-        try {
-          if (typeof d.bar === "number" && d.bar !== bar) d.bar = bar;
-          if (typeof d.synth.goToBar === "function") d.synth.goToBar(bar);
-        } catch (e6) {}
+        // Stop edge only: freeze where you are — do NOT goToBar(0)
+        stopLocalPlay(d);
       }
-      // if wantPlay && isPlaying: leave local playhead alone (smooth motion)
+      // idle+idle: do nothing (no bar seeking)
 
       try {
         if (typeof editor !== "undefined" && editor && typeof editor.updatePlayButton === "function") {
@@ -784,46 +1644,90 @@ try {
         }
       } catch (e7) {}
     } finally {
-      setTimeout(function () { applyingTransport = false; }, 30);
+      setTimeout(function () { applyingTransport = false; }, 80);
     }
   }
 
-  function sendTransport(force) {
-    // Play/stop must be instant — do not block on localInteract / applyingRemote
-    if (!room || applyingTransport) return;
+  function sendTransport(force, opts) {
+    opts = opts || {};
+    if (!room) return;
+    if (applyingTransport && !opts.restart) return;
     if (!canEdit()) return;
     var t = getTransport();
     if (!t) return;
-    // ONLY sync play/stop edges (+ bar at press). No playhead streaming.
-    if (!force && lastPlayingSent !== null && lastPlayingSent === t.playing) {
+    var restart = !!opts.restart;
+    var bar = opts.bar != null ? (opts.bar|0) : t.bar;
+    var playing = opts.playing != null ? !!opts.playing : t.playing;
+    // skip duplicate play state (restart always allowed)
+    if (!force && !restart && lastPlayingSent !== null && lastPlayingSent === playing) {
       return;
     }
-    lastPlayingSent = t.playing;
-    lastTransportSent = transportKey(t);
+    if (force && !restart && lastPlayingSent !== null && lastPlayingSent === playing && !opts.allowDup) {
+      return;
+    }
+    lastPlayingSent = playing;
+    var ts = Date.now();
+    lastTransportTs = Math.max(lastTransportTs, ts);
     var tpayload = {
       type: "transport",
-      playing: t.playing,
-      bar: t.bar,
-      playhead: t.bar,
+      playing: playing,
+      bar: bar,
+      playhead: t.playhead != null ? t.playhead : bar,
+      restart: restart,
       room: room,
       tabId: tabId,
-      ts: Date.now(),
+      ts: ts,
       urgent: true
     };
-    // Fire both paths immediately (same-PC tabs + network)
     try {
       if (ws && ws.readyState === 1) ws.send(JSON.stringify(tpayload));
     } catch (e) {}
     try { if (bc) bc.postMessage(tpayload); } catch (e2) {}
   }
 
+  /** After BeepBox toggles play, send ONE authoritative state (no multi-blast flicker) */
+  function scheduleTransportSync() {
+    if (!room || !canEdit()) return;
+    if (pendingTransportTimer) clearTimeout(pendingTransportTimer);
+    // debounce keydown+keyup into a single send after engine applies toggle
+    pendingTransportTimer = setTimeout(function () {
+      pendingTransportTimer = null;
+      if (applyingTransport) return;
+      var t = getTransport();
+      if (!t) return;
+      sendTransport(true, { playing: t.playing, bar: t.bar, allowDup: true });
+    }, 40);
+  }
+
+  /** Host restart (Ctrl+F / F) — one clean restart packet, not a burst of play/stop */
+  function broadcastRestartFromStart() {
+    if (!room || !canEdit()) return;
+    var t = getTransport();
+    var playing = t ? !!t.playing : false;
+    try {
+      var d = doc();
+      if (d && d.synth) {
+        resumeAllAudio();
+        if (typeof d.synth.snapToStart === "function") d.synth.snapToStart();
+        else snapTransportToBar(d, 0);
+        if (playing && !d.synth.playing) startLocalPlay(d);
+      }
+    } catch (e) {}
+    sendTransport(true, { restart: true, bar: 0, playing: playing, allowDup: true });
+    // single follow-up in case first packet dropped
+    setTimeout(function () {
+      sendTransport(true, { restart: true, bar: 0, playing: playing, allowDup: true });
+    }, 50);
+  }
+
   // Catch play/stop even if Space handler misses (button click, etc.)
   function watchPlayEdge() {
     if (!room || !canEdit() || applyingTransport) return;
+    if (Date.now() < transportHoldUntil) return;
     var t = getTransport();
     if (!t) return;
     if (lastPlayingSent === null || lastPlayingSent !== t.playing) {
-      sendTransport(true);
+      scheduleTransportSync();
     }
   }
 
@@ -834,8 +1738,10 @@ try {
     var s = currentSong();
     if (!s || (!force && s === lastSent)) return;
     lastSent = s;
+    lastApplied = s; // own edits are already on screen — avoid echo fights
     localSeq += 1;
     var ts = Date.now();
+    lastRemoteTs = Math.max(lastRemoteTs, ts);
     var payload = {
       type: "state",
       song: s,
@@ -854,7 +1760,7 @@ try {
     } catch (e2) {}
   }
 
-  // Debounced flush: wait until user pauses editing ~48ms, then one send
+  // Debounced flush: wait until user pauses editing, then one send (wider gap online = less fight)
   function scheduleSendState(force) {
     if (force) {
       if (stateDebounceTimer) clearTimeout(stateDebounceTimer);
@@ -866,7 +1772,7 @@ try {
     stateDebounceTimer = setTimeout(function () {
       stateDebounceTimer = null;
       sendState(false);
-    }, 16);
+    }, 40);
   }
 
   function scheduleSendTransport(force) {
@@ -895,9 +1801,8 @@ try {
       var onUp = function () {
         localInteract = false;
         if (interactClearTimer) clearTimeout(interactClearTimer);
-        // send final song immediately when gesture ends
+        // send final song immediately when gesture ends (NOT transport — that caused play flicker)
         sendState(true);
-        sendTransport(true);
         flushPendingRemote();
       };
 
@@ -924,26 +1829,29 @@ try {
 
       window.addEventListener("keydown", function (e) {
         if (!room || !canEdit()) return;
-        // Space = play/stop — blast edge sync (BeepBox toggles during this event)
+        var tag = (e.target && e.target.tagName || "").toLowerCase();
+        if (tag === "input" || tag === "textarea" || (e.target && e.target.isContentEditable)) return;
+
+        // Space = play/stop — ONE sync after engine toggles (multi-blast caused remote on/off flicker)
         if (e.code === "Space" || e.key === " ") {
-          // after BeepBox handles the key
-          queueMicrotask(function () { sendTransport(true); });
-          requestAnimationFrame(function () {
-            sendTransport(true);
-            setTimeout(function () { sendTransport(true); }, 8);
-            setTimeout(function () { sendTransport(true); }, 20);
-          });
+          scheduleTransportSync();
+          return;
+        }
+
+        // Ctrl/Cmd+F only = restart for everyone (plain F is a piano note — was yanking playhead)
+        var isF = e.code === "KeyF" || e.key === "f" || e.key === "F";
+        if (isF && (e.ctrlKey || e.metaKey)) {
+          setTimeout(function () { broadcastRestartFromStart(); }, 20);
         }
       }, true);
       window.addEventListener("keyup", function (e) {
         if (!room || !canEdit()) return;
-        if (e.code === "Space" || e.key === " ") sendTransport(true);
+        if (e.code === "Space" || e.key === " ") scheduleTransportSync();
       }, true);
-      // Play button clicks (outside canvas)
+      // Play button / UI clicks — only send if play state actually flipped
       document.addEventListener("click", function () {
         if (!room || !canEdit()) return;
-        queueMicrotask(function () { watchPlayEdge(); });
-        setTimeout(function () { watchPlayEdge(); }, 10);
+        setTimeout(function () { watchPlayEdge(); }, 40);
       }, true);
     }
     try {
@@ -959,19 +1867,57 @@ try {
     } catch (e) {}
   }
 
-  function sendPresence() {
+  // Cap cursor net traffic (~10 Hz). Smoother on free hosts than 15–60 Hz spam.
+  var lastPresenceSent = 0;
+  var presenceFlushTimer = null;
+  var PRESENCE_MIN_MS = 55; // ~18 Hz — smoother path without flooding
+  var lastSentXY = { x: -1, y: -1 };
+  var lastSentChannel = -999;
+
+  function sendPresence(force) {
     if (!room) return;
+    var now = Date.now();
+    if (!force && (now - lastPresenceSent) < PRESENCE_MIN_MS) {
+      if (!presenceFlushTimer) {
+        presenceFlushTimer = setTimeout(function () {
+          presenceFlushTimer = null;
+          sendPresence(true);
+        }, PRESENCE_MIN_MS - (now - lastPresenceSent));
+      }
+      return;
+    }
+    if (presenceFlushTimer) {
+      clearTimeout(presenceFlushTimer);
+      presenceFlushTimer = null;
+    }
+    var ch = currentChannel() | 0;
+    var bar = currentBar() | 0;
+    // 3 decimals — smoother than 0.01 grid steps
+    var x = Math.round(pointerState.x * 1000) / 1000;
+    var y = Math.round(pointerState.y * 1000) / 1000;
+    // skip tiny position noise only when channel did not change
+    if (!force && lastSentXY.x >= 0 && ch === lastSentChannel) {
+      var md = Math.abs(x - lastSentXY.x) + Math.abs(y - lastSentXY.y);
+      if (md < 0.004 && pointerState.inside && (now - lastPresenceSent) < 500) return;
+    }
+    var key = x + "," + y + "," + (pointerState.inside ? 1 : 0) + "," + ch + "," + bar;
+    if (!force && key === lastPresenceKey && (now - lastPresenceSent) < 800) return;
+    lastPresenceKey = key;
+    lastPresenceSent = now;
+    lastSentXY.x = x;
+    lastSentXY.y = y;
+    lastSentChannel = ch;
     var payload = {
       type: "presence",
       name: getName(),
-      channel: currentChannel(),
-      bar: currentBar(),
-      x: pointerState.x,
-      y: pointerState.y,
+      channel: ch,
+      bar: bar,
+      x: x,
+      y: y,
       inside: !!pointerState.inside,
       room: room,
       tabId: tabId,
-      ts: Date.now()
+      ts: now
     };
     try {
       if (ws && ws.readyState === 1) ws.send(JSON.stringify(payload));
@@ -979,33 +1925,56 @@ try {
     try { if (bc) bc.postMessage(payload); } catch (e2) {}
   }
 
+  function peersMetaKey(list) {
+    list = list || [];
+    var parts = [];
+    for (var i = 0; i < list.length; i++) {
+      var p = list[i];
+      if (!p) continue;
+      parts.push((p.name || "") + ":" + (p.role || "") + ":" + (p.isHost ? "1" : "0") + ":" + (p.channel != null ? p.channel : ""));
+    }
+    return parts.join("|");
+  }
+  var lastPeersMeta = "";
+
   function escapeHtml(s) {
     return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
   }
 
-  function renderPeers(list) {
+  function renderPeers(list, opts) {
     peers = list || [];
-    if (peersEl) {
+    opts = opts || {};
+    // include local channel so "same ch" chips update when YOU switch tracks
+    var myCh = currentChannel();
+    var meta = peersMetaKey(peers) + "|me:" + myCh;
+    var chipsDirty = opts.forceChips || meta !== lastPeersMeta;
+    if (chipsDirty && peersEl) {
+      lastPeersMeta = meta;
       peersEl.innerHTML = "";
-      var myCh = currentChannel();
       for (var i = 0; i < peers.length; i++) {
         var p = peers[i];
+        if (!p) continue;
         var chip = document.createElement("span");
         var role = p.role || "edit";
+        // 0-based like BeepBox track numbers (0,1,2,3…) — coerce string channels too
+        var chNum = (p.channel != null && p.channel !== "" && !isNaN(+p.channel)) ? (+p.channel | 0) : 0;
+        if (chNum < 0) chNum = 0;
+        var same = p.name !== getName() && chNum === (myCh | 0);
         chip.className = "sb-peer-chip" + (role === "view" ? " view" : "") + (p.isHost ? " host" : "");
-        var same = typeof p.channel === "number" && p.channel === myCh && p.name !== getName();
         if (same) chip.classList.add("ghost-same");
-        var color = PEER_COLORS[i % PEER_COLORS.length];
+        var color = peerColorFor(p.name, i);
         chip.innerHTML =
           '<span class="dot" style="background:' + color + '"></span>' +
-          escapeHtml(p.name || "?") + " · ch" + ((p.channel || 0) + 1) +
-          " · " + (p.isHost ? "host" : role) +
-          (same ? "" : "");
+          '<span class="nm">' + escapeHtml(p.name || "?") + "</span>" +
+          '<span class="ch-badge">' + chNum + "</span>" +
+          '<span class="role">' + escapeHtml(p.isHost ? "host" : role) + "</span>";
         chip.title = same
-          ? "Same channel as you — see their cursor ghost on the grid"
-          : "On channel " + ((p.channel || 0) + 1) + " (other channels show as transparent notes if Show Channels is on)";
+          ? (p.name || "?") + " is on the same track as you (" + chNum + ") — ghostly track bar"
+          : (p.name || "?") + " is on track " + chNum;
         peersEl.appendChild(chip);
       }
+    } else {
+      peers = list || peers;
     }
     renderCursors(peers);
   }
@@ -1015,7 +1984,7 @@ try {
     if (!lobbyList) return;
     lobbyList.innerHTML = "";
     if (!lobbyServers.length) {
-      lobbyList.innerHTML = '<div class="sb-srv-empty">No public servers right now — host one!</div>';
+      lobbyList.innerHTML = '<div class="sb-srv-empty">No public rooms right now — host one (blank title gets a random name).</div>';
       return;
     }
     for (var i = 0; i < lobbyServers.length; i++) {
@@ -1023,9 +1992,9 @@ try {
         var row = document.createElement("div");
         row.className = "sb-srv";
         row.innerHTML =
-          '<div class="sb-srv-title">' + escapeHtml(srv.title || "Untitled") + '</div>' +
+          '<div class="sb-srv-title">' + escapeHtml(srv.title || "jam") + '</div>' +
           '<div class="sb-srv-meta">host ' + escapeHtml(srv.host || "?") +
-          " · " + (srv.count || 1) + " online · " +
+          " · " + (srv.count || 1) + " online · code " + escapeHtml(srv.code || "?") + " · " +
           (srv.defaultRole === "view" ? "view-only" : "edit") + "</div>";
         var btn = document.createElement("button");
         btn.type = "button";
@@ -1086,17 +2055,17 @@ try {
         if (pendingRemoteSong && !localInteract) flushPendingRemote();
         if (!room) return;
         var now = Date.now();
-        if (now - lastTickApply < 80) return;
+        if (now - lastTickApply < 150) return;
         lastTickApply = now;
-        // Always process receive-side even if view-only
         if (!localInteract && canEdit()) {
           sendState(false);
-          sendTransport(false);
+          // only watch play edge — never spam transport
+          watchPlayEdge();
         }
-        if (!canEdit() && lastApplied && !localInteract) {
+        if (!canEdit() && lastApplied && !localInteract && !applyingRemote) {
           try {
             var s = currentSong();
-            if (s && s !== lastApplied) applySong(lastApplied, true, lastRemoteTs);
+            if (s && s !== lastApplied) applySong(lastApplied, false, lastRemoteTs || Date.now());
           } catch (e) {}
         }
       };
@@ -1255,7 +2224,8 @@ try {
         if (msg.type === "request_tab_sync") {
           if (room && msg.room === room && canEdit() && !applyingRemote) {
             sendState(true);
-            sendTransport(true);
+            var tBc = getTransport();
+            if (tBc && tBc.playing) sendTransport(true, { playing: true, bar: tBc.bar, allowDup: true });
           }
           return;
         }
@@ -1274,15 +2244,20 @@ try {
             for (var i = 0; i < peers.length; i++) {
               if (peers[i].name === msg.name) {
                 peers[i].x = msg.x; peers[i].y = msg.y; peers[i].inside = msg.inside;
-                peers[i].channel = msg.channel; peers[i].bar = msg.bar;
+                peers[i].channel = (msg.channel != null && !isNaN(+msg.channel)) ? (+msg.channel | 0) : (peers[i].channel | 0);
+                peers[i].bar = (msg.bar != null && !isNaN(+msg.bar)) ? (+msg.bar | 0) : (peers[i].bar | 0);
                 found = true; break;
               }
             }
             if (!found) peers.push({
-              name: msg.name, role: "edit", channel: msg.channel || 0, bar: msg.bar || 0,
+              name: msg.name,
+              role: "edit",
+              channel: (msg.channel != null && !isNaN(+msg.channel)) ? (+msg.channel | 0) : 0,
+              bar: (msg.bar != null && !isNaN(+msg.bar)) ? (+msg.bar | 0) : 0,
               x: msg.x, y: msg.y, inside: msg.inside, isHost: false
             });
-            renderPeers(peers);
+            // channel may change on existing peer — always re-evaluate chips/meta
+            renderPeers(peers, { forceChips: false });
           }
         }
       };
@@ -1306,20 +2281,8 @@ try {
     });
     window.addEventListener("focus", onTabActive);
     window.addEventListener("pageshow", onTabActive);
-    document.addEventListener("mouseenter", function () {
-      if (room) {
-        forceEditorRedraw();
-        // soft pull when mouse enters the tab content
-        if (document.visibilityState === "visible") {
-          try { if (bc) bc.postMessage({ type: "request_tab_sync", tabId: tabId, room: room, ts: Date.now() }); } catch (e) {}
-        }
-      }
-    }, true);
     document.addEventListener("pointerdown", function () {
-      if (room) {
-        resumeAllAudio();
-        forceEditorRedraw();
-      }
+      if (room) resumeAllAudio();
     }, true);
   }
 
@@ -1332,30 +2295,49 @@ try {
     startIdleWorker();
     startAudioKeepAlive();
     requestWakeLock();
-    // Backup poll (Worker also ticks when iOS throttles this)
+    // Backup poll — keep light to avoid thrash / playhead jumps
     pollTimer = setInterval(function () {
-      // Play/stop edge every tick (cheap) — notes still debounced
       watchPlayEdge();
-      if (!localInteract) {
+      // channel switch → push presence + refresh same-ch chips/cursors
+      var chNow = currentChannel();
+      if (chNow !== lastLocalChannel) {
+        lastLocalChannel = chNow;
+        sendPresence(true);
+        if (peers && peers.length) renderPeers(peers, { forceChips: true });
+      }
+      if (!localInteract && canEdit()) {
         sendState(false);
       }
-      if (!canEdit() && lastApplied && !localInteract) {
+      // view-only: gently re-apply authority song if desynced (playhead preserved in applySong)
+      if (!canEdit() && lastApplied && !localInteract && !applyingRemote) {
         var s = currentSong();
-        if (s && s !== lastApplied) applySong(lastApplied, true, lastRemoteTs);
+        if (s && s !== lastApplied) applySong(lastApplied, false, lastRemoteTs || Date.now());
       }
-    }, 32);
-    presenceTimer = setInterval(sendPresence, 100);
+    }, 120);
+    presenceTimer = setInterval(function () { sendPresence(false); }, 400);
+    pingTimer = setInterval(function () {
+      try {
+        if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "ping" }));
+      } catch (e) {}
+    }, 25000);
     enableGhostChannels();
-    sendPresence();
-    sendTransport(true);
+    lastLocalChannel = currentChannel();
+    sendPresence(true);
     sendState(true);
-    requestFullSync();
+    if (peers && peers.length) renderPeers(peers, { forceChips: true });
+    // do NOT sendTransport here — idle bar:0 was yanking peers to the start
+    // soft pull song if we're missing room authority
+    setTimeout(function () {
+      if (room && !lastApplied) requestFullSync();
+    }, 200);
   }
   function stopLoops() {
     if (pollTimer) clearInterval(pollTimer);
     if (presenceTimer) clearInterval(presenceTimer);
+    if (pingTimer) clearInterval(pingTimer);
     if (stateDebounceTimer) clearTimeout(stateDebounceTimer);
-    pollTimer = presenceTimer = stateDebounceTimer = null;
+    if (pendingTransportTimer) clearTimeout(pendingTransportTimer);
+    pollTimer = presenceTimer = pingTimer = stateDebounceTimer = pendingTransportTimer = null;
     stopIdleWorker();
     stopAudioKeepAlive();
     releaseWakeLock();
@@ -1390,12 +2372,59 @@ try {
 
     if (msg.type === "lobby") {
       renderLobby(msg.servers || []);
+      if (msg.servers) updateOnlineUi({ lobby: msg.servers });
       return;
     }
-    if (msg.type === "hello") return;
+    if (msg.type === "stats") {
+      updateOnlineUi(msg);
+      return;
+    }
+    if (msg.type === "site_theme") {
+      applySiteTheme(msg.theme);
+      // theme payload may include a stale announce — only show if non-empty + ts
+      if (msg.announce) showSiteAnnounce(msg.announce, msg.announceTs || msg.ts, msg.ttlMs);
+      return;
+    }
+    if (msg.type === "announce") {
+      if (msg.text) showSiteAnnounce(msg.text, msg.ts, msg.ttlMs);
+      else hideSiteAnnounce(false);
+      return;
+    }
+    if (msg.type === "admin_list") {
+      fillAdminSelects(msg.rooms || []);
+      if (msg.theme) applySiteTheme(msg.theme);
+      updateOnlineUi({ online: msg.online, lobby: liveStats.lobby });
+      return;
+    }
+    if (msg.type === "admin_ok") {
+      setStatus(msg.message || "Admin OK", "on");
+      if (msg.action === "theme" && msg.theme) applySiteTheme(msg.theme);
+      if (sevenVaultUnlocked) sendAdmin("admin_list");
+      return;
+    }
+    if (msg.type === "kicked") {
+      room = null;
+      wantRoom = null;
+      stopLoops();
+      setConnectedUi(false);
+      setReadonlyUi(false);
+      renderPeers([]);
+      setSyncPill(false);
+      setStatus("Kicked: " + (msg.reason || "removed"), "err");
+      return;
+    }
+    if (msg.type === "hello") {
+      updateOnlineUi(msg);
+      if (msg.theme) applySiteTheme(msg.theme);
+      if (msg.announce) showSiteAnnounce(msg.announce, msg.announceTs || msg.ts, msg.ttlMs);
+      return;
+    }
 
     if (msg.type === "created" || msg.type === "joined") {
       room = msg.room;
+      wantRoom = room;
+      rejoinAttempts = 0;
+      if (rejoinTimer) { clearTimeout(rejoinTimer); rejoinTimer = null; }
       roomTitle = msg.title || "";
       myRole = msg.role || (msg.type === "created" ? "host" : "edit");
       isHost = myRole === "host" || msg.type === "created";
@@ -1414,55 +2443,102 @@ try {
       );
       if (bannerEl) {
         bannerEl.textContent = isHost
-          ? (msg.public ? "Public — listed in server browser. " : "Private — code only. ") +
-            "Code " + room + ". Joiners: " + (msg.defaultRole || "edit") + "."
+          ? (msg.public ? "Public — on the server list. " : "Private — invite only. ") +
+            "Code " + room + ". Tap Share invite for a friend link. Joiners: " + (msg.defaultRole || "edit") + "."
           : "In \"" + (roomTitle || room) + "\" as " + myRole + ". Host: " + (msg.host || "?") + ".";
       }
+      // permanent-host deep link in the address bar
+      try {
+        var ru = new URL(location.href);
+        ru.searchParams.set("room", room);
+        history.replaceState(null, "", ru.pathname + ru.search);
+      } catch (eHist) {}
       if (msg.song) applySong(msg.song, true, msg.ts || Date.now());
       if (msg.transport) applyTransport(msg.transport, true);
       lastSent = currentSong();
       lastTransportSent = "";
-      renderPeers(msg.peers || []);
+      lastSongSig = msg.sig != null ? msg.sig : null;
+      renderPeers(msg.peers || [], { forceChips: true });
       startLoops();
-      setSyncPill(true, false, "Live sync on — leave this tab open (don\'t lock phone long)");
+      setSyncPill(true, false, "Live sync — keep this tab open");
       resumeAllAudio();
-      setTimeout(function () { sendState(true); sendTransport(true); sendPresence(); }, 16);
+      // only blast transport on join if play state actually needs sharing — never force bar 0
+      setTimeout(function () {
+        sendState(true);
+        sendPresence(true);
+        var t0 = getTransport();
+        if (t0 && t0.playing) sendTransport(true, { playing: true, bar: t0.bar, allowDup: true });
+      }, 16);
     } else if (msg.type === "heartbeat") {
-      // Idle recovery only — avoid redraw thrash (was causing lag/glitch)
+      // Light keep-alive only — never seek playhead
       resumeAllAudio();
-      if (msg.song && msg.song !== lastApplied) {
-        applySong(msg.song, false, msg.ts || 0);
-        forceEditorRedraw();
+      if (msg.sig != null && lastApplied && lastSongSig != null && msg.sig !== lastSongSig) {
+        if (!localInteract) requestFullSync();
       }
+      if (msg.song && msg.song !== lastApplied) {
+        applySong(msg.song, false, msg.songTs || msg.ts || 0);
+      }
+      if (msg.sig != null) lastSongSig = msg.sig;
       if (msg.transport) {
         try {
           var d = doc();
           var want = !!msg.transport.playing;
           var cur = d && d.synth ? !!d.synth.playing : false;
-          if (want !== cur) applyTransport(msg.transport, true);
+          // play edge only — applyTransport no longer seeks on same-state / stop
+          if (want !== cur) applyTransport(msg.transport, false);
           else if (want && cur) resumeAllAudio();
         } catch (e) {}
       }
-      // peers: light update without full chip rebuild spam
       if (msg.peers) {
-        peers = msg.peers;
-        renderCursors(peers);
+        // keep chips in sync (channel / same-track) not just cursors
+        renderPeers(msg.peers, { forceChips: false });
       }
     } else if (msg.type === "full_sync") {
       if (msg.role) myRole = msg.role;
       setReadonlyUi(!canEdit());
       if (msg.song) applySong(msg.song, true, msg.ts || Date.now());
-      if (msg.transport) applyTransport(msg.transport, true);
-      if (msg.peers) renderPeers(msg.peers);
+      // only apply transport if play/pause differs — never force seek to bar 0
+      if (msg.transport) {
+        try {
+          var dFs = doc();
+          var wFs = !!msg.transport.playing;
+          var cFs = dFs && dFs.synth ? !!dFs.synth.playing : false;
+          if (wFs !== cFs) applyTransport(msg.transport, false);
+        } catch (eFs) {}
+      }
+      if (msg.peers) renderPeers(msg.peers, { forceChips: true });
       if (msg.title) roomTitle = msg.title;
+      if (msg.sig != null) lastSongSig = msg.sig;
       setStatus("Resynced after wake · room active", "on");
+      forceEditorRedraw(true);
     } else if (msg.type === "state") {
       if (msg.song) applySong(msg.song, false, msg.ts || 0);
+      if (msg.sig != null) lastSongSig = msg.sig;
     } else if (msg.type === "transport") {
       applyTransport(msg, false);
-    } else if (msg.type === "peers" || msg.type === "presence") {
-      if (msg.peers) renderPeers(msg.peers);
+    } else if (msg.type === "presence") {
+      // high-frequency: cursors only; chips/status only when roster changes
+      if (msg.peers) {
+        var prevCount = peers.length;
+        renderPeers(msg.peers, { forceChips: false });
+        if (msg.title) roomTitle = msg.title;
+        if (room && msg.count != null && msg.count !== prevCount) {
+          setStatus(
+            "Room <b style='color:#6dffa8'>" + escapeHtml(roomTitle || room) + "</b> · " +
+              room + " · " + msg.count + " online · you: <b>" + myRole + "</b>",
+            "on"
+          );
+        }
+      }
+    } else if (msg.type === "peers") {
+      if (msg.peers) {
+        syncMyRoleFromPeers(msg.peers);
+        renderPeers(msg.peers, { forceChips: true });
+      }
       if (msg.title) roomTitle = msg.title;
+      if (msg.host && bannerEl && room && !isHost) {
+        bannerEl.textContent = "In \"" + (roomTitle || room) + "\" as " + myRole + ". Host: " + msg.host + ".";
+      }
       if (room && msg.count) {
         setStatus(
           "Room <b style='color:#6dffa8'>" + escapeHtml(roomTitle || room) + "</b> · " +
@@ -1471,15 +2547,33 @@ try {
         );
       }
     } else if (msg.type === "permissions" || msg.type === "your_role") {
-      if (msg.role) myRole = msg.role;
+      if (msg.role) {
+        myRole = msg.role;
+        isHost = myRole === "host";
+      }
       if (msg.defaultRole && roleSel) roleSel.value = msg.defaultRole;
-      if (msg.peers) renderPeers(msg.peers);
+      if (msg.peers) {
+        syncMyRoleFromPeers(msg.peers);
+        renderPeers(msg.peers, { forceChips: true });
+      }
+      setConnectedUi(!!room);
       setReadonlyUi(!canEdit());
-      setStatus("Permissions updated — you are <b>" + myRole + "</b>", "on");
+      setStatus(
+        isHost ? "You're the host now" : ("Permissions updated — you are <b>" + myRole + "</b>"),
+        "on"
+      );
     } else if (msg.type === "error") {
-      setStatus(msg.message || "error", "err");
+      var em = msg.message || "error";
+      setStatus(em, "err");
+      // room gone (host left alone / sleep kill) — stop endless rejoin
+      if (wantRoom && /not found|closed/i.test(em)) {
+        wantRoom = null;
+        if (rejoinTimer) { clearTimeout(rejoinTimer); rejoinTimer = null; }
+        setSyncPill(false);
+      }
     } else if (msg.type === "left") {
       room = null;
+      wantRoom = null;
       roomTitle = "";
       isHost = false;
       myRole = "edit";
@@ -1489,6 +2583,65 @@ try {
       renderPeers([]);
       setStatus("Left server — solo", "");
     }
+  }
+
+  function scheduleRejoin() {
+    if (!wantRoom) return;
+    if (rejoinTimer) clearTimeout(rejoinTimer);
+    var delay = Math.min(8000, 800 + rejoinAttempts * 700);
+    rejoinAttempts += 1;
+    rejoinTimer = setTimeout(function () {
+      rejoinTimer = null;
+      if (!wantRoom) return;
+      setStatus("Reconnecting to room " + wantRoom + "…", "err");
+      ensureLobby(function () {
+        if (!wantRoom || !ws || ws.readyState !== 1) {
+          scheduleRejoin();
+          return;
+        }
+        var code = wantRoom;
+        var nm = getName();
+        try {
+          ws.send(JSON.stringify({
+            type: "join",
+            room: code,
+            name: nm,
+            nameKey: nameKeyForSend(nm),
+            channel: currentChannel(),
+            bar: currentBar()
+          }));
+        } catch (e) {
+          scheduleRejoin();
+        }
+      });
+    }, delay);
+  }
+
+  var wakeHintTimer = null;
+  function clearWakeHint() {
+    if (wakeHintTimer) {
+      clearInterval(wakeHintTimer);
+      wakeHintTimer = null;
+    }
+  }
+  function startWakeHint() {
+    clearWakeHint();
+    var t0 = Date.now();
+    wakeHintTimer = setInterval(function () {
+      if (!ws || ws.readyState !== 0) {
+        clearWakeHint();
+        return;
+      }
+      var sec = Math.round((Date.now() - t0) / 1000);
+      if (sec >= 3) {
+        setStatus(
+          isRemoteHost()
+            ? "Waking free host… " + sec + "s (first open after sleep can take up to ~60s)"
+            : "Connecting… " + sec + "s",
+          ""
+        );
+      }
+    }, 500);
   }
 
   function ensureLobby(cb) {
@@ -1501,7 +2654,6 @@ try {
     if (ws && ws.readyState === 0) {
       // still connecting
       if (cb) {
-        var prev = ws.onopen;
         ws.addEventListener("open", function once() {
           if (cb) cb();
         }, { once: true });
@@ -1509,21 +2661,35 @@ try {
       return;
     }
     hardCloseWs();
-    setStatus("Connecting to lobby…", "");
+    setStatus(isRemoteHost() ? "Connecting to host…" : "Connecting to lobby…", "");
+    startWakeHint();
     try {
       ws = new WebSocket(wsUrl());
     } catch (e) {
-      setStatus("Can't connect — is the server/launcher running?", "err");
+      clearWakeHint();
+      setStatus(
+        isRemoteHost()
+          ? "Can't reach host — refresh in a minute if it was asleep"
+          : "Can't connect — start the local server",
+        "err"
+      );
       if (lobbyList) lobbyList.innerHTML = '<div class="sb-srv-empty">Server offline</div>';
       return;
     }
     ws.onmessage = onSocketMessage;
     ws.onopen = function () {
-      setStatus("Online — host a server or join from the public list / code", "on");
+      clearWakeHint();
+      if (!wantRoom) {
+        setStatus("Online — host a room or join from the list / code", "on");
+      }
       try { ws.send(JSON.stringify({ type: "lobby" })); } catch (e) {}
       if (cb) cb();
+      // deep-link ?room=CODE once lobby is up
+      tryAutoJoinFromUrl();
     };
     ws.onclose = function () {
+      clearWakeHint();
+      var wasInRoom = !!room || !!wantRoom;
       if (room) {
         room = null;
         stopLoops();
@@ -1531,12 +2697,65 @@ try {
         setReadonlyUi(false);
         renderPeers([]);
       }
-      if (wantLobby) {
-        setStatus("Disconnected — retrying lobby…", "err");
-        setTimeout(function () { if (wantLobby) ensureLobby(); }, 2000);
+      if (wantRoom && wasInRoom) {
+        setStatus("Disconnected — reconnecting to " + wantRoom + "…", "err");
+        setSyncPill(true, true, "Reconnecting…");
+        scheduleRejoin();
+      } else if (wantLobby) {
+        setStatus(
+          isRemoteHost()
+            ? "Disconnected — retrying (host may be waking)…"
+            : "Disconnected — retrying lobby…",
+          "err"
+        );
+        setTimeout(function () { if (wantLobby && !wantRoom) ensureLobby(); }, 2500);
       }
     };
     ws.onerror = function () {};
+  }
+
+  var autoJoinTried = false;
+  function tryAutoJoinFromUrl() {
+    if (autoJoinTried) return;
+    var code = roomFromUrl();
+    if (!code) return;
+    if (!getName()) {
+      // wait for name gate; gate handler will call again
+      return;
+    }
+    autoJoinTried = true;
+    if (codeEl) codeEl.value = code;
+    setStatus("Invite link — joining " + code + "…", "on");
+    joinWithCode(code);
+  }
+
+  function copyInvite() {
+    var code = room || (codeEl && codeEl.value) || roomFromUrl();
+    code = String(code || "").trim().toUpperCase().replace(/\s+/g, "");
+    if (!code) {
+      setStatus("Host or join a room first, then Share invite", "err");
+      return;
+    }
+    var link = inviteUrl(code);
+    var text = "SevenBox jam\n" + link + "\nCode: " + code;
+    function ok() {
+      setStatus("Invite copied — send to friends", "on");
+      if (bannerEl) {
+        bannerEl.textContent = "Invite: " + link;
+      }
+    }
+    function fail() {
+      // fallback: select-friendly status
+      setStatus("Copy this: " + link, "on");
+      try { window.prompt("Copy invite link", link); } catch (e) {}
+    }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(ok).catch(fail);
+        return;
+      }
+    } catch (e0) {}
+    fail();
   }
 
   function connectForAction(onOpen) {
@@ -1547,49 +2766,81 @@ try {
   }
 
   function joinWithCode(code) {
-    code = String(code || "").trim().toUpperCase().replace(/\s+/g, "");
+    code = String(code || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
     if (!code) {
       setStatus("Enter a room code", "err");
       return;
     }
+    if (code.length < 4) {
+      setStatus("Room code looks too short", "err");
+      return;
+    }
     if (!requireName()) return;
+    if (codeEl) codeEl.value = code;
     connectForAction(function () {
-      if (!ws || ws.readyState !== 1) return;
+      if (!ws || ws.readyState !== 1) {
+        setStatus("Still connecting — try Join again in a second", "err");
+        return;
+      }
       var nm = getName();
-      ws.send(JSON.stringify({
-        type: "join",
-        room: code,
-        name: nm,
-        nameKey: nameKeyForSend(nm),
-        channel: currentChannel(),
-        bar: currentBar()
-      }));
+      setStatus("Joining " + code + "…", "");
+      try {
+        ws.send(JSON.stringify({
+          type: "join",
+          room: code,
+          name: nm,
+          nameKey: nameKeyForSend(nm),
+          channel: currentChannel(),
+          bar: currentBar()
+        }));
+      } catch (e) {
+        setStatus("Couldn't join — try again", "err");
+      }
     });
+  }
+
+  function randomRoomTitle() {
+    var pool = [
+      "late night jam", "chip soup", "beep zone", "pixel loft", "8-bit attic",
+      "synth kitchen", "noise closet", "loop station", "midnight grid", "cassette club",
+      "pulse room", "hex jam", "square wave cafe", "arcade after dark", "tiny stadium",
+      "floppy disk party", "retro rocket", "glitch garden", "coin sound lab", "bass bunker"
+    ];
+    return pool[Math.floor(Math.random() * pool.length)];
   }
 
   btnCreate.addEventListener("click", function () {
     if (!requireName()) return;
     var title = (titleEl && titleEl.value || "").trim();
     if (!title) {
-      title = getName() + "'s jam";
+      title = randomRoomTitle();
       if (titleEl) titleEl.value = title;
     }
     var isPublic = !visEl || visEl.value !== "private";
     var defRole = (roleSel && roleSel.value) || "edit";
     connectForAction(function () {
-      if (!ws || ws.readyState !== 1) return;
+      if (!ws || ws.readyState !== 1) {
+        setStatus("Still connecting — try Host again in a second", "err");
+        return;
+      }
       var nm = getName();
-      ws.send(JSON.stringify({
-        type: "create",
-        name: nm,
-        nameKey: nameKeyForSend(nm),
-        title: title,
-        public: isPublic,
-        song: currentSong(),
-        defaultRole: defRole,
-        channel: currentChannel(),
-        bar: currentBar()
-      }));
+      setStatus("Hosting \"" + title + "\"…", "");
+      try {
+        ws.send(JSON.stringify({
+          type: "create",
+          name: nm,
+          nameKey: nameKeyForSend(nm),
+          title: title,
+          public: isPublic,
+          song: currentSong(),
+          defaultRole: defRole,
+          channel: currentChannel(),
+          bar: currentBar()
+        }));
+      } catch (e) {
+        setStatus("Couldn't create room — reconnecting…", "err");
+        ensureLobby();
+      }
     });
   });
 
@@ -1598,6 +2849,9 @@ try {
   });
 
   btnLeave.addEventListener("click", function () {
+    wantRoom = null;
+    autoJoinTried = false;
+    if (rejoinTimer) { clearTimeout(rejoinTimer); rejoinTimer = null; }
     if (ws && ws.readyState === 1) {
       try { ws.send(JSON.stringify({ type: "leave" })); } catch (e) {}
     }
@@ -1609,8 +2863,14 @@ try {
     setConnectedUi(false);
     setReadonlyUi(false);
     renderPeers([]);
-    setStatus("Left server — lobby still online", "");
+    setStatus("Left room — still online", "");
     setSyncPill(false);
+    try {
+      var lu = new URL(location.href);
+      lu.searchParams.delete("room");
+      lu.searchParams.delete("code");
+      history.replaceState(null, "", lu.pathname + lu.search);
+    } catch (eL) {}
     try { if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "lobby" })); } catch (e) {}
   });
 
@@ -1619,6 +2879,13 @@ try {
       ensureLobby(function () {
         setStatus("Lobby refreshed", "on");
       });
+    });
+  }
+
+  var btnShare = document.getElementById("sb-mp-share");
+  if (btnShare) {
+    btnShare.addEventListener("click", function () {
+      copyInvite();
     });
   }
 
@@ -1651,15 +2918,21 @@ try {
     });
   }
 
-  setInterval(function () {
-    // Only refresh chips if channel changed (cursors animate themselves)
-    if (room && peers.length) {
-      renderCursors(peers);
-    }
-  }, 500);
+  // (no 500ms re-render of cursors — that re-applied targets and caused glitch)
 
-  // Auto-connect to lobby so public servers show up
-  setTimeout(function () { ensureLobby(); }, 600);
+  // Pre-fill code field from invite link before lobby connects
+  (function () {
+    var pre = roomFromUrl();
+    if (pre && codeEl) codeEl.value = pre;
+  })();
+
+  setupSevenVault();
+  refreshSevenVaultVisibility();
+
+  // Auto-connect to permanent host lobby (browser-only multiplayer)
+  setTimeout(function () {
+    ensureLobby(function () { tryAutoJoinFromUrl(); });
+  }, 400);
 })();
 } catch (__sbMpErr) {
   try { console.warn('SevenBox multiplayer failed (studio still works)', __sbMpErr); } catch (_) {}

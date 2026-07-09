@@ -1,5 +1,7 @@
 # SevenBox — permanent free host (no same Wi‑Fi)
 
+**Live app (example):** `https://sevenbox.onrender.com/chipbox.html`
+
 When this is live, **everyone always opens the same link**, then:
 
 - **Host** a public/private server (title)
