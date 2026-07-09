@@ -451,74 +451,16 @@ body {
   overflow: hidden;
   box-sizing: border-box;
 }
-/* Simple arrow cursor (mouse position) */
-.sb-remote-cursor {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 0;
-  height: 0;
-  pointer-events: none;
-  z-index: 42;
-  --line: #ff5ec8;
-  transform: translate(-2px, -2px);
-}
-.sb-remote-cursor .sb-cur-arrow {
-  width: 0;
-  height: 0;
-  border-style: solid;
-  border-width: 0 0 14px 10px;
-  border-color: transparent transparent transparent var(--line);
-  filter: drop-shadow(0 0 1px #000) drop-shadow(1px 1px 0 #000);
-}
-.sb-remote-cursor .sb-cur-label {
-  position: absolute;
-  left: 12px;
-  top: -2px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 1px 5px 1px 6px;
-  border-radius: 4px;
-  font: 700 10px/1.2 system-ui, -apple-system, "Segoe UI", sans-serif;
-  color: #1a1020;
-  background: var(--line);
-  white-space: nowrap;
-  max-width: 120px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
-}
-.sb-remote-cursor .sb-cur-label .sb-cur-name {
-  font-weight: 800;
-  max-width: 70px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.sb-remote-cursor .sb-cur-label .sb-cur-ch {
-  font: 800 9px/1 system-ui, sans-serif;
-  padding: 2px 4px;
-  border-radius: 3px;
-  background: rgba(0,0,0,0.22);
-  color: #fff;
-}
-.sb-remote-cursor.same-ch .sb-cur-arrow {
-  border-left-width: 11px;
-  border-bottom-width: 15px;
-  filter: drop-shadow(0 0 3px var(--line)) drop-shadow(1px 1px 0 #000);
-}
-.sb-remote-cursor.same-ch .sb-cur-label {
-  outline: 1px solid #fff;
-}
-.sb-remote-cursor.dim-ch {
-  opacity: 0.85;
-}
+/* Hide legacy multiplayer mouse arrows (track marks only) */
+.sb-remote-cursor { display: none !important; }
 /*
- * Track mark = thin vertical pink line (like BeepBox playhead), ONLY on that
- * player's channel row — not a full-width box, not full editor height.
+ * Track mark = thin vertical pink line on THAT player's channel only.
+ * Fixed at left of track grid (not glued to shared playhead / not following others).
  */
 .sb-track-line {
   position: absolute;
   width: 3px;
-  height: 26px;
+  height: 24px;
   margin-left: -1px;
   pointer-events: none;
   z-index: 41;
@@ -526,11 +468,12 @@ body {
   --line: #ff5ec8;
   border: none;
   border-radius: 2px;
-  opacity: 1;
+  opacity: 0.95;
   background: var(--line);
   box-shadow: 0 0 8px var(--line), 0 0 2px #fff;
+  will-change: transform;
+  transition: top 0.08s linear, left 0.08s linear;
 }
-/* little cap pointing up — sits on the track row like the beat tracker */
 .sb-track-line::before {
   content: "";
   position: absolute;
@@ -548,8 +491,7 @@ body {
   position: absolute;
   left: 50%;
   bottom: 100%;
-  top: auto;
-  transform: translate(-50%, -8px);
+  transform: translate(-50%, -7px);
   display: inline-flex;
   align-items: center;
   gap: 3px;
@@ -559,11 +501,11 @@ body {
   color: #1a1020;
   background: var(--line);
   white-space: nowrap;
-  max-width: 110px;
+  max-width: 100px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.4);
 }
 .sb-track-line .sb-track-tag .sb-cur-name {
-  max-width: 64px;
+  max-width: 56px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -574,30 +516,19 @@ body {
   background: rgba(0,0,0,0.22);
   color: #fff;
 }
-.sb-track-line.is-self .sb-track-tag {
-  outline: 1px dashed rgba(255,255,255,0.7);
-}
-/* Soft pulse when same channel as you */
 @keyframes sb-ghost-track {
-  0%, 100% { opacity: 0.38; }
-  50% { opacity: 0.62; }
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.65; }
 }
 .sb-track-line.same-ch {
-  opacity: 0.48;
-  background: var(--line);
-  box-shadow: 0 0 10px var(--line);
-  filter: saturate(0.75);
+  opacity: 0.5;
   animation: sb-ghost-track 2.4s ease-in-out infinite;
+  filter: saturate(0.8);
 }
 .sb-track-line.same-ch .sb-track-tag {
-  opacity: 0.85;
   color: var(--line);
-  background: rgba(10, 6, 14, 0.65);
+  background: rgba(10, 6, 14, 0.7);
   border: 1px solid var(--line);
-}
-.sb-track-line.same-ch .sb-track-tag .sb-cur-ch {
-  background: rgba(255, 94, 200, 0.2);
-  color: #ffe6f7;
 }
 .sb-track-line.dim-ch {
   opacity: 0.95;
@@ -605,15 +536,8 @@ body {
   animation: none;
 }
 @media (prefers-reduced-motion: reduce) {
+  .sb-track-line { transition: none; }
   .sb-track-line.same-ch { animation: none; opacity: 0.45; }
-}
-.sb-remote-cursor.same-ch {
-  opacity: 0.55;
-  filter: saturate(0.8);
-}
-.sb-remote-cursor.dim-ch {
-  opacity: 1;
-  filter: none;
 }
 
 #sb-sync-pill {
@@ -1764,7 +1688,7 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
 
   // Native script load — Safari handles this much better than fetch+eval
   var s = document.createElement("script");
-  s.src = "chipbox-app.js?v=mp30";
+  s.src = "chipbox-app.js?v=mp31";
   s.async = false;
   s.onload = function () {
     setMsg("Engine loaded — starting…");
