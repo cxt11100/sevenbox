@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>SevenBox · owned by seven</title>
+	<meta name="mobile-web-app-capable" content="yes" />
+	<meta name="apple-mobile-web-app-capable" content="yes" />
+	<meta name="apple-mobile-web-app-status-bar-style" content="black" />
+	<meta name="theme-color" content="#1c1730" />
+	<meta name="format-detection" content="telephone=no" />
+	<!-- fonts: system-ui only (faster on phone) -->
+<meta name="robots" content="noindex, nofollow" />
+	<style type="text/css">
+		html {
+			background: var(--page-margin, black);
+			overflow-x: hidden;
+			font-size: large;
+			font-family: 'Roboto', sans-serif;
+			line-height: 1.3;
+			color: var(--primary-text, white);
+		}
+		body {
+			margin: auto;
+			overflow-x: hidden;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			align-content: center;
+		}
+		#beepboxEditorContainer {
+			min-height: 645px;
+			overflow: auto;
+			background: var(--editor-background, black);
+			width: 100%;
+			max-width: 710px;
+			padding-left: 30px;
+			padding-right: 30px;
+		}
+		#text-content {
+			overflow: auto;
+			background: var(--editor-background, black);
+			width: 100%;
+			max-width: 710px;
+			padding-left: 30px;
+			padding-right: 30px;
+		}
+		h1 {
+			font-size: 1.7rem;
+			text-align: center;
+			margin-top: 0.5em;
+			margin-bottom: 0.5em;
+			-webkit-text-stroke-width: 0;
+		}
+		h2 {
+			font-size: 1.5rem;
+			text-align: center;
+			margin-top: 0.5em;
+			margin-bottom: 0.5em;
+			-webkit-text-stroke-width: 0;
+		}
+		a {
+			color: var(--link-accent, #98f);
+		}
+		.donation form {
+			display: inline;
+		}
+		.donation input[type="submit"] {
+			-webkit-appearance: none;
+			appearance: none;
+			background: none;
+			border: none;
+			font-family: inherit;
+			font-size: inherit;
+			color: var(--link-accent, #98f);
+			text-decoration: underline;
+			cursor: pointer;
+			padding: 0;
+			margin: 0;
+		}
+		
+		/* wide screen */
+		@media (min-width: 711px) {
+			html {
+				width: 100%;
+			}
+			body {
+				width: 100%;
+			}
+			.column-container {
+				width: 710px;
+				display: flex;
+				gap: 25px;
+			}
+			/*.instructions-column {
+				min-width: 0;
+			}
+			.twitter-column {
+				width: 300px;
+				flex-shrink: 0;
+			}*/
+		}
+		
+		/* narrow screen */
+		@media (max-width: 710px) {
+			body {
+				width: 100%;
+			}
+			p, .donation {
+				margin: 1em 0.5em;
+			}
+			.column-container {
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+			}
+		}
+	
+/* SevenBox full layout — Grok build, seven owner · lag-safe */
+html {
+  background: #06050c !important;
+  font-family: system-ui, "Segoe UI", "DM Sans", sans-serif !important;
+  font-size: 15px !important;
+  color: #ebe6f8;
+}
+body {
+  margin: 0 !important;
+  padding: 0 !important;
+  min-height: 100vh !important;
+  width: 100% !important;
+  display: block !important;
+  align-items: stretch !important;
+  background:
+    radial-gradient(900px 420px at 15% 0%, rgba(120, 80, 220, 0.14), transparent 60%),
+    radial-gradient(700px 380px at 90% 20%, rgba(60, 200, 255, 0.08), transparent 55%),
+    #06050c !important;
+}
+.sb-app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+.sb-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 20px;
+  background: rgba(10, 8, 18, 0.92);
+  border-bottom: 1px solid rgba(155, 109, 255, 0.22);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.35);
+}
+.sb-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.sb-logo {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(145deg, #7a4dff, #3ecfff);
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 14px;
+  color: #fff;
+  letter-spacing: -0.02em;
+  flex-shrink: 0;
+}
+.sb-brand-text h1 {
+  margin: 0 !important;
+  font-size: 1.15rem !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.02em;
+  color: #f2ecff !important;
+  text-align: left !important;
+  background: none !important;
+  -webkit-text-fill-color: unset !important;
+}
+.sb-brand-text p {
+  margin: 2px 0 0 !important;
+  font-size: 12px;
+  color: #9a8fb8;
+}
+.sb-brand-text strong { color: #c4b0ff; font-weight: 600; }
+.sb-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.sb-header-actions a, .sb-header-actions button {
+  font-size: 12px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(155, 109, 255, 0.3);
+  background: #141022;
+  color: #e8dfff;
+  text-decoration: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+.sb-header-actions a:hover, .sb-header-actions button:hover {
+  border-color: #9b6dff;
+  color: #fff;
+}
+.sb-header-actions a.sb-ext {
+  border-color: rgba(122, 231, 255, 0.35);
+  color: #7ae7ff;
+}
+.sb-main {
+  flex: 1;
+  width: 100%;
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 16px 14px 8px;
+  box-sizing: border-box;
+}
+.sb-stage {
+  border-radius: 16px;
+  border: 1px solid rgba(155, 109, 255, 0.22);
+  background: #0c0a16;
+  box-shadow: 0 10px 32px rgba(0,0,0,0.4);
+  overflow: hidden;
+}
+.sb-stage-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9a8fb8;
+  background: #120e20;
+  border-bottom: 1px solid rgba(155, 109, 255, 0.15);
+}
+.sb-stage-label span { color: #c4b0ff; }
+#beepboxEditorContainer {
+  width: 100% !important;
+  max-width: none !important;
+  min-height: 645px;
+  margin: 0 !important;
+  padding: 12px 16px 8px !important;
+  background: var(--editor-background, #0c0a16) !important;
+  border-radius: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+  overflow: auto;
+}
+#bbn-studio {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 12px 14px 14px;
+  border-top: 1px solid rgba(155, 109, 255, 0.15);
+  background: #100c1c;
+  color: #ebe6f8;
+}
+#bbn-studio .bbn-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+#bbn-studio .bbn-row:last-child { margin-bottom: 0; }
+#bbn-studio .bbn-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #c4b0ff;
+  background: #1c1730;
+  border: 1px solid rgba(155, 109, 255, 0.35);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+#bbn-studio .bbn-badge i {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: #5ce1ff;
+}
+#bbn-studio .bbn-how {
+  flex: 1 1 240px;
+  font-size: 12.5px;
+  color: #9a8fb8;
+  line-height: 1.45;
+}
+#bbn-studio .bbn-how strong { color: #f2ecff; font-weight: 600; }
+#bbn-studio .bbn-k {
+  font-family: ui-monospace, "JetBrains Mono", monospace;
+  font-size: 11px;
+  background: #1c1730;
+  border: 1px solid rgba(155, 109, 255, 0.3);
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: #e8dfff;
+}
+#bbn-studio button, #bbn-studio select {
+  background: #1c1730;
+  color: #f2ecff;
+  border: 1px solid rgba(155, 109, 255, 0.3);
+  border-radius: 8px;
+  padding: 7px 11px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+}
+#bbn-studio button:hover, #bbn-studio select:hover { border-color: #9b6dff; }
+#bbn-studio button.primary {
+  background: #5a2fd0;
+  border-color: #9b6dff;
+  font-weight: 600;
+}
+#text-content {
+  width: 100% !important;
+  max-width: none !important;
+  padding: 18px 4px 8px !important;
+  background: transparent !important;
+  display: none;
+  overflow: visible !important;
+}
+#text-content.bbn-open { display: block; }
+#text-content h1 {
+  font-size: 1.5rem !important;
+  font-weight: 700 !important;
+  color: #f2ecff !important;
+  text-align: left !important;
+  margin: 0 0 0.4em !important;
+}
+#text-content h2 {
+  font-size: 1.05rem !important;
+  text-align: left !important;
+  color: #e8dfff !important;
+  margin: 1.2em 0 0.4em !important;
+}
+#text-content p, #text-content li {
+  color: #9a8fb8;
+  line-height: 1.55;
+  margin: 0.4em 0;
+}
+#text-content a {
+  color: #7ae7ff !important;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(122, 231, 255, 0.35);
+}
+#text-content a:hover { border-bottom-color: #7ae7ff; }
+.bbn-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 0.9em 0 0.6em;
+}
+@media (max-width: 640px) {
+  .bbn-grid { grid-template-columns: 1fr; }
+  .sb-header { padding: 10px 12px; }
+  .sb-main { padding: 10px 8px; }
+}
+.bbn-card {
+  background: #141022;
+  border: 1px solid rgba(155, 109, 255, 0.18);
+  border-radius: 10px;
+  padding: 11px 12px;
+  text-align: left;
+}
+.bbn-card strong {
+  display: block;
+  color: #f2ecff;
+  font-size: 0.9rem;
+  margin-bottom: 3px;
+}
+.bbn-card span {
+  color: #9a8fb8;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+.sb-footer {
+  margin-top: auto;
+  padding: 18px 20px 22px;
+  border-top: 1px solid rgba(155, 109, 255, 0.15);
+  background: #0a0812;
+  color: #8a80a8;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+.sb-footer-inner {
+  max-width: 920px;
+  margin: 0 auto;
+  display: grid;
+  gap: 10px;
+}
+.sb-footer strong { color: #d8d0f0; font-weight: 600; }
+.sb-footer a {
+  color: #7ae7ff;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(122, 231, 255, 0.3);
+}
+.sb-footer a:hover { border-bottom-color: #7ae7ff; }
+.sb-credits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  margin-top: 4px;
+}
+.sb-credits span { white-space: nowrap; }
+/* kill old beepbox page column constraints */
+.column-container { width: auto !important; max-width: 100%; }
+.donation { display: none !important; }
+
+/* Remote cursors + same-channel ghost */
+#beepboxEditorContainer { position: relative !important; }
+#sb-cursor-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 40;
+  overflow: hidden;
+}
+.sb-remote-cursor {
+  position: absolute;
+  transform: translate(-1px, -1px);
+  pointer-events: none;
+  z-index: 41;
+  will-change: left, top;
+  /* position smoothed in JS (lerp), not CSS transition */
+}
+.sb-remote-cursor .sb-cur-arrow {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px 10px 10px 10px;
+  background: currentColor;
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,0.55),
+    0 2px 6px rgba(0,0,0,0.35);
+  transform: rotate(-20deg);
+}
+.sb-remote-cursor .sb-cur-label {
+  position: absolute;
+  left: 12px;
+  top: 10px;
+  padding: 2px 7px 3px;
+  border-radius: 999px;
+  font: 600 10px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif;
+  letter-spacing: 0.02em;
+  color: #0c0a16;
+  background: currentColor;
+  white-space: nowrap;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.12),
+    0 2px 8px rgba(0,0,0,0.4);
+  opacity: 0.95;
+}
+.sb-remote-cursor .sb-cur-label span {
+  color: #0c0a16;
+  /* readable on bright cursor colors */
+  filter: none;
+  mix-blend-mode: normal;
+  font-weight: 700;
+}
+/* invert text via dual layer for contrast on light/dark hues */
+.sb-remote-cursor .sb-cur-label {
+  background: color-mix(in srgb, currentColor 88%, white 12%);
+}
+.sb-remote-cursor.same-ch .sb-cur-ghost {
+  position: absolute;
+  left: -12px;
+  top: -12px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.2;
+  border: 1.5px solid currentColor;
+  animation: sbGhostPulse 1.25s ease-in-out infinite;
+}
+.sb-remote-cursor.same-ch .sb-cur-label {
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.25),
+    0 0 10px color-mix(in srgb, currentColor 45%, transparent);
+}
+@keyframes sbGhostPulse {
+  0%, 100% { transform: scale(1); opacity: 0.16; }
+  50% { transform: scale(1.2); opacity: 0.3; }
+}
+.sb-peer-chip.ghost-same {
+  opacity: 0.95 !important;
+  border-style: dashed !important;
+  border-width: 2px !important;
+  box-shadow: 0 0 0 1px rgba(109,255,168,0.25);
+}
+.sb-peer-chip.ghost-same::after {
+  content: " · same ch";
+  opacity: 0.85;
+  font-weight: 600;
+}
+
+#sb-sync-pill {
+  display: none;
+  position: fixed;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  z-index: 99990;
+  background: rgba(20, 40, 30, 0.92);
+  border: 1px solid rgba(109,255,168,0.45);
+  color: #c8f5d8;
+  font: 600 12px system-ui, -apple-system, sans-serif;
+  padding: 8px 14px;
+  border-radius: 999px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+  max-width: 92vw;
+  text-align: center;
+  pointer-events: none;
+}
+#sb-sync-pill.on { display: block; }
+#sb-sync-pill.warn {
+  border-color: rgba(255,200,80,0.6);
+  color: #ffe6a0;
+}
+
+/* Server browser / lobby */
+#sb-mp-lobby {
+  width: 100%;
+  margin-top: 8px;
+  border-top: 1px solid rgba(109,255,168,0.15);
+  padding-top: 8px;
+}
+#sb-mp-lobby h3 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6dffa8;
+  font-weight: 700;
+}
+#sb-mp-lobby-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 180px;
+  overflow: auto;
+}
+.sb-srv {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(18,32,24,0.9);
+  border: 1px solid rgba(109,255,168,0.2);
+}
+.sb-srv .sb-srv-title {
+  flex: 1 1 120px;
+  font-weight: 700;
+  color: #e8fff2;
+  font-size: 13px;
+}
+.sb-srv .sb-srv-meta {
+  font-size: 11px;
+  color: #8ab89a;
+}
+.sb-srv button {
+  background: #1a8f55 !important;
+  border-color: #6dffa8 !important;
+  font-weight: 700;
+}
+.sb-srv-empty {
+  font-size: 12px;
+  color: #6a8a72;
+  padding: 6px 2px;
+}
+.sb-mp-host-opts {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.sb-mp-host-opts input#sb-mp-title {
+  flex: 1 1 140px;
+  min-width: 120px;
+  width: auto;
+  font-family: inherit;
+}
+
+/* Name gate + multiplayer v2 */
+#sb-name-gate {
+  position: fixed; inset: 0; z-index: 100000;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(6,5,12,0.92);
+  padding: 20px;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+#sb-name-gate.sb-hide { display: none !important; }
+.sb-gate-card {
+  width: min(360px, 100%);
+  background: #141022;
+  border: 1px solid rgba(155,109,255,0.35);
+  border-radius: 16px;
+  padding: 22px 20px;
+  color: #e8dfff;
+  box-shadow: 0 16px 40px rgba(0,0,0,0.45);
+}
+.sb-gate-card h2 { margin: 0 0 6px; font-size: 1.25rem; color: #f2ecff; }
+.sb-gate-card p { margin: 0 0 14px; color: #9a8fb8; font-size: 13px; line-height: 1.45; }
+.sb-gate-card input {
+  width: 100%; box-sizing: border-box;
+  background: #0c0a16; border: 1px solid rgba(155,109,255,0.35);
+  border-radius: 10px; color: #fff; padding: 12px 12px; font-size: 16px;
+  margin-bottom: 12px;
+}
+.sb-gate-card button {
+  width: 100%; border: none; border-radius: 10px;
+  background: #5a2fd0; color: #fff; font-weight: 700;
+  font-size: 15px; padding: 12px; cursor: pointer;
+}
+.sb-gate-card button:disabled { opacity: 0.4; }
+#sb-gate-key { margin-top: -4px; }
+#sb-gate-err { min-height: 1em; }
+
+#sb-mp-peers {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  width: 100%; margin-top: 6px;
+}
+.sb-peer-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 8px; border-radius: 999px;
+  font-size: 11px; background: rgba(109,255,168,0.08);
+  border: 1px solid rgba(109,255,168,0.25); color: #c8f5d8;
+}
+.sb-peer-chip.view { border-color: rgba(122,231,255,0.35); color: #b8eaff; background: rgba(122,231,255,0.08); }
+.sb-peer-chip.host { border-color: rgba(255,215,109,0.45); color: #ffe6a0; }
+.sb-peer-chip .dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--pc, #6dffa8); opacity: 0.85;
+}
+.sb-peer-chip.ghost-same {
+  opacity: 0.55;
+  border-style: dashed;
+}
+#sb-mp-role-row { width: 100%; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.sb-mp select.sb-mp-role {
+  background: #122018; border: 1px solid rgba(109,255,168,0.3);
+  border-radius: 8px; color: #e8fff2; padding: 6px 8px; font-size: 12px;
+}
+.sb-mp-hardlock {
+  position: relative;
+}
+.sb-mp-hardlock::after {
+  content: "View only — song is locked. Local look/sound prefs only.";
+  position: absolute;
+  left: 8px; right: 8px; top: 8px;
+  z-index: 20;
+  pointer-events: none;
+  font: 600 11px system-ui, sans-serif;
+  color: #9ad4ff;
+  background: rgba(10, 20, 30, 0.75);
+  border: 1px solid rgba(122,231,255,0.35);
+  border-radius: 8px;
+  padding: 6px 8px;
+  text-align: center;
+}
+.sb-mp-hardlock #beepboxEditorContainer,
+.sb-mp-hardlock .beepboxEditor,
+#beepboxEditorContainer.sb-mp-hardlock {
+  pointer-events: none !important;
+  user-select: none !important;
+  opacity: 0.92;
+}
+/* keep page chrome clickable outside editor */
+.sb-mp-readonly {
+
+  outline: 2px dashed rgba(122,231,255,0.35);
+  outline-offset: -2px;
+}
+.sb-mp-banner {
+  width: 100%;
+  font-size: 11px;
+  color: #9ad4ff;
+  margin-top: 2px;
+}
+
+/* Loading splash — shows before huge engine JS parses */
+#sb-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: #06050c;
+  color: #e8dfff;
+  font-family: system-ui, -apple-system, sans-serif;
+  text-align: center;
+  padding: 24px;
+}
+#sb-splash.sb-hide {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+#sb-splash .sb-spin {
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(155,109,255,0.25);
+  border-top-color: #9b6dff;
+  border-radius: 50%;
+  animation: sbspin 0.7s linear infinite;
+}
+@keyframes sbspin { to { transform: rotate(360deg); } }
+#sb-splash h1 {
+  margin: 0 !important;
+  font-size: 1.4rem !important;
+  color: #f2ecff !important;
+  text-align: center !important;
+}
+#sb-splash p {
+  margin: 0;
+  color: #9a8fb8;
+  font-size: 14px;
+  max-width: 18em;
+  line-height: 1.4;
+}
+#sb-splash .sb-err {
+  color: #ff8a9a;
+  font-size: 13px;
+  max-width: 22em;
+  display: none;
+}
+#sb-splash.sb-failed .sb-err { display: block; }
+#sb-splash.sb-failed .sb-spin { display: none; }
+/* Mobile layout fixes */
+@media (max-width: 720px) {
+  .sb-header { padding: 10px 12px !important; }
+  .sb-header-actions .sb-ext { display: none; }
+  .sb-main { padding: 8px 6px !important; }
+  .sb-stage-label { font-size: 10px; padding: 6px 10px; }
+  #beepboxEditorContainer {
+    min-height: 480px !important;
+    padding: 6px 4px !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  .sb-mp { padding: 8px 10px; }
+  #bbn-studio { padding: 10px 10px 12px; }
+  .sb-brand-text p { font-size: 11px; }
+}
+
+/* SevenBox multiplayer UI */
+.sb-mp {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 14px;
+  border-top: 1px solid rgba(94, 220, 160, 0.2);
+  background: #0d1512;
+  font-size: 12px;
+  color: #b8dcc8;
+}
+.sb-mp .sb-mp-title {
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 10px;
+  color: #6dffa8;
+  margin-right: 4px;
+}
+.sb-mp input[type="text"] {
+  background: #122018;
+  border: 1px solid rgba(109, 255, 168, 0.3);
+  border-radius: 8px;
+  color: #e8fff2;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-family: ui-monospace, monospace;
+  width: 100px;
+}
+.sb-mp input.sb-mp-name { width: 110px; font-family: inherit; }
+.sb-mp button {
+  background: #163526;
+  color: #e8fff2;
+  border: 1px solid rgba(109, 255, 168, 0.35);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.sb-mp button:hover { border-color: #6dffa8; }
+.sb-mp button.primary {
+  background: #1a8f55;
+  border-color: #6dffa8;
+  font-weight: 600;
+}
+.sb-mp button:disabled { opacity: 0.45; cursor: default; }
+.sb-mp-status {
+  flex: 1 1 140px;
+  min-width: 120px;
+  color: #8ab89a;
+  font-size: 11.5px;
+}
+.sb-mp-status.on { color: #6dffa8; }
+.sb-mp-status.err { color: #ff8a9a; }
+.sb-mp-dot {
+  display: inline-block;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #556;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+.sb-mp-status.on .sb-mp-dot {
+  background: #6dffa8;
+  box-shadow: 0 0 6px #6dffa8;
+}
+
+</style>
+</head>
+
+<body>
+
+<div id="sb-name-gate" role="dialog" aria-modal="true" aria-labelledby="sb-gate-title">
+  <div class="sb-gate-card">
+    <h2 id="sb-gate-title">Who are you?</h2>
+    <p>Pick a display name. No fake admin/power names. The name <b>seven</b> needs a special key.</p>
+    <input id="sb-gate-input" type="text" maxlength="24" placeholder="Your name" autocomplete="nickname" enterkeyhint="done" />
+    <input id="sb-gate-key" type="password" maxlength="32" placeholder="Key (only if name is seven)" style="display:none" autocomplete="off" />
+    <p id="sb-gate-err" style="display:none;color:#ff8a9a;font-size:12px;margin:0 0 10px"></p>
+    <button type="button" id="sb-gate-go" disabled>Enter SevenBox</button>
+  </div>
+</div>
+
+<audio id="sb-keepalive-audio" src="silent.wav?v=1" loop playsinline webkit-playsinline preload="auto" style="position:fixed;width:0;height:0;opacity:0;pointer-events:none"></audio>
+<div id="sb-sync-pill">Live sync on — keep this tab open</div>
+<div id="sb-splash" aria-live="polite">
+  <div class="sb-spin" aria-hidden="true"></div>
+  <h1>SevenBox</h1>
+  <p id="sb-splash-msg">Loading studio… first open can take a few seconds on phone.</p>
+  <p class="sb-err" id="sb-splash-err"></p>
+</div>
+<div class="sb-app">
+  <header class="sb-header">
+    <div class="sb-brand">
+      <div class="sb-logo">S7</div>
+      <div class="sb-brand-text">
+        <h1>SevenBox</h1>
+        <p>Built by <strong>Grok</strong> · Owned by <strong>seven</strong> · private</p>
+      </div>
+    </div>
+    <div class="sb-header-actions">
+      <button type="button" id="bbn-tips-top">Tips</button>
+      <a class="sb-ext" href="https://www.beepbox.co/" target="_blank" rel="noopener noreferrer">beepbox.co ↗</a>
+    </div>
+  </header>
+
+  <main class="sb-main">
+    <div class="sb-stage">
+      <div class="sb-stage-label">
+        <span>Studio</span>
+        <span style="color:#9a8fb8;letter-spacing:0.04em;text-transform:none">click grid · patterns · purple loop</span>
+      </div>
+      <div id="beepboxEditorContainer">
+        <noscript>Sorry, SevenBox needs JavaScript on to run.</noscript>
+      </div>
+      <div id="bbn-studio">
+        <div class="bbn-row">
+          <div class="bbn-badge"><i></i> Quick guide</div>
+          <div class="bbn-how">
+            <strong>1.</strong> Place notes ·
+            <strong>2.</strong> Patterns ·
+            <strong>3.</strong> Purple loop ·
+            <span class="bbn-k">Space</span> play
+          </div>
+          <button type="button" id="bbn-tips">Show tips</button>
+        </div>
+      </div>
+
+      
+      
+      <div class="sb-mp" id="sb-mp">
+        <span class="sb-mp-title">Multiplayer</span>
+        <input class="sb-mp-name" id="sb-mp-name" type="text" maxlength="24" placeholder="your name" />
+        <div class="sb-mp-host-opts">
+          <input id="sb-mp-title" type="text" maxlength="40" placeholder="Server title (e.g. late night jam)" />
+          <select class="sb-mp-role" id="sb-mp-visibility" title="Public = on server list">
+            <option value="public" selected>Public</option>
+            <option value="private">Private</option>
+          </select>
+          <select class="sb-mp-role" id="sb-mp-default-role" title="What joiners can do">
+            <option value="edit">Joiners: Edit</option>
+            <option value="view">Joiners: View only</option>
+          </select>
+          <button type="button" class="primary" id="sb-mp-create">Host server</button>
+        </div>
+        <input id="sb-mp-code" type="text" maxlength="6" placeholder="CODE" style="text-transform:uppercase" autocomplete="off" />
+        <button type="button" id="sb-mp-join">Join code</button>
+        <button type="button" id="sb-mp-leave" disabled>Leave</button>
+        <button type="button" id="sb-mp-refresh">Refresh list</button>
+        <button type="button" id="sb-mp-apply-role" title="Host: apply joiner permission to everyone in room">Apply perms</button>
+        <span class="sb-mp-status" id="sb-mp-status"><span class="sb-mp-dot"></span>Solo — host a public/private server or join</span>
+        <div class="sb-mp-banner" id="sb-mp-banner">Everyone uses this same app. Host public/private → join by list or code. Song + play/stop sync for editors. Your personal UI prefs stay local.</div>
+        <div id="sb-mp-peers"></div>
+        <div id="sb-mp-lobby">
+          <h3>Public servers</h3>
+          <div id="sb-mp-lobby-list"><div class="sb-srv-empty">Connecting to lobby…</div></div>
+        </div>
+      </div>
+
+    </div>
+
+    <div id="text-content">
+      <section>
+        <h1>How to use SevenBox</h1>
+        <p>
+          Your private music sketchpad. You own every track you make.
+          Built for you by Grok — offline, no accounts, nothing uploads unless you export.
+        </p>
+        <div class="bbn-grid">
+          <div class="bbn-card"><strong>Notes</strong><span>Click the gray rows at the top. Drag sideways to change note length.</span></div>
+          <div class="bbn-card"><strong>Patterns</strong><span>Numbered boxes under the grid rearrange the song structure.</span></div>
+          <div class="bbn-card"><strong>Loop</strong><span>Purple bar = loop region. Drag the ends to cover more bars.</span></div>
+          <div class="bbn-card"><strong>Drums</strong><span>Bottom channel row is drums. Rows above = melody &amp; harmony.</span></div>
+        </div>
+      </section>
+      <section>
+        <h2>Keyboard</h2>
+        <p>
+          <span class="bbn-k">Space</span> play/pause ·
+          <span class="bbn-k">Z</span> undo ·
+          <span class="bbn-k">Y</span> redo ·
+          <span class="bbn-k">C</span>/<span class="bbn-k">V</span> copy/paste ·
+          <span class="bbn-k">0–9</span> pattern ·
+          <span class="bbn-k">Arrows</span> move selection
+        </p>
+      </section>
+      <section>
+        <h2>Live multiplayer</h2>
+        <p>
+          Run the SevenBox server, click <strong>Create room</strong>, send friends the site link + room code.
+          Everyone edits the same song (last change wins if you clash). Works on the same Wi‑Fi, or over the internet with a tunnel.
+        </p>
+        <h2>Credits &amp; ownership</h2>
+        <p>
+          <strong>Owner:</strong> seven<br>
+          <strong>Built by:</strong> Grok (xAI) — SevenBox layout, studio tools, private packaging<br>
+          <strong>Original tracker:</strong> <a href="https://www.beepbox.co/" target="_blank" rel="noopener noreferrer">BeepBox</a> by John Nesky
+          — visit the original site at <a href="https://www.beepbox.co/" target="_blank" rel="noopener noreferrer">https://www.beepbox.co/</a>
+          (MIT license). The music engine is BeepBox; this site shell is SevenBox.
+        </p>
+      </section>
+    </div>
+  </main>
+
+  <footer class="sb-footer">
+    <div class="sb-footer-inner">
+      <div>
+        <strong>SevenBox</strong> — private build for <strong>seven</strong>.
+        Designed &amp; assembled by <strong>Grok</strong>. Multiplayer rooms when the server is running. Songs you create are yours.
+      </div>
+      <div class="sb-credits">
+        <span>Owner: <strong>seven</strong></span>
+        <span>Built by: <strong>Grok</strong></span>
+        <span>Original: <a href="https://www.beepbox.co/" target="_blank" rel="noopener noreferrer">beepbox.co</a> (John Nesky, MIT)</span>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var splash = document.getElementById("sb-splash");
+  var msg = document.getElementById("sb-splash-msg");
+  var err = document.getElementById("sb-splash-err");
+  function setMsg(t) { if (msg) msg.textContent = t; }
+  function fail(t) {
+    if (splash) splash.classList.add("sb-failed");
+    setMsg("Couldn't load SevenBox");
+    if (err) err.textContent = t;
+  }
+  setMsg("Loading studio on iPhone/PC…");
+
+  // Native script load — Safari handles this much better than fetch+eval
+  var s = document.createElement("script");
+  s.src = "chipbox-app.js?v=audit7";
+  s.async = false;
+  s.onload = function () {
+    setMsg("Engine loaded — starting…");
+    // bootSevenBox runs inside chipbox-app.js; force-clear splash if still stuck
+    setTimeout(function () {
+      var sp = document.getElementById("sb-splash");
+      if (sp && !sp.classList.contains("sb-failed")) {
+        // If editor exists, hide; else show error
+        if (typeof editor !== "undefined" && editor) {
+          sp.classList.add("sb-hide");
+          setTimeout(function () { if (sp.parentNode) sp.parentNode.removeChild(sp); }, 300);
+        } else if (typeof beepbox !== "undefined" && beepbox.SongEditor) {
+          try {
+            var box = document.getElementById("beepboxEditorContainer");
+            window.editor = new beepbox.SongEditor(box);
+            sp.classList.add("sb-hide");
+            setTimeout(function () { if (sp.parentNode) sp.parentNode.removeChild(sp); }, 300);
+          } catch (e) {
+            fail("Editor start failed: " + (e.message || e));
+          }
+        } else {
+          fail("Engine loaded but boot did not finish. Hard-refresh and try again.");
+        }
+      }
+    }, 2000);
+  };
+  s.onerror = function () {
+    fail("Could not download chipbox-app.js — check tunnel/server, then hard-refresh.");
+  };
+  document.body.appendChild(s);
+})();
+</script>
+
+</html>

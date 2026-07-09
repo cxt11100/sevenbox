@@ -1,0 +1,14 @@
+# Permanent free SevenBox host on Render
+# After GitHub push: render.com → New → Blueprint → this repo
+services:
+  - type: web
+    name: sevenbox
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: python multiplayer/server.py --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.0"

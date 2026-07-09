@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.log
+.grok/
+tools/firefox/
+tools/cloudflared
+*.tar.bz2
+.DS_Store
+.env
+.local/
