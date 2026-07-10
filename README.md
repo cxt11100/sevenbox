@@ -1,7 +1,7 @@
 # SevenBox
-**Private chip-music studio** for [seven](https://github.com/cxt11100) — sketch songs in the browser and jam live with friends.
+**Chiptune studio** — sketch songs in the browser and jam live with friends.
 
-Free online chiptune song editor with multiplayer rooms and a permanent free host.
+Free online chiptune song editor with multiplayer rooms and a permanent free host. Open for everyone to use.
 
 ---
 
