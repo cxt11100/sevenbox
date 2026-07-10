@@ -1,151 +1,128 @@
 # SevenBox
-
 **Private chip-music studio** for [seven](https://github.com/cxt11100) — sketch songs in the browser and jam live with friends.
 
 Free online chiptune song editor with multiplayer rooms and a permanent free host.
 
 ---
 
-## Quick links
-
+## Quick Links
 | | |
 |---|---|
-| **Play** | [https://sevenbox.onrender.com/chipbox.html](https://sevenbox.onrender.com/chipbox.html) |
+| **Play Online** | [https://sevenbox.onrender.com/chipbox.html](https://sevenbox.onrender.com/chipbox.html) |
 | **Discord** | [https://discord.gg/j9HQdatjP](https://discord.gg/j9HQdatjP) |
-| **Health** | [https://sevenbox.onrender.com/health](https://sevenbox.onrender.com/health) |
 | **Repo** | [github.com/cxt11100/sevenbox](https://github.com/cxt11100/sevenbox) |
 
 ---
 
-## Community (Discord)
+## How It Works
+1. Open the app: [https://sevenbox.onrender.com/chipbox.html](https://sevenbox.onrender.com/chipbox.html)
+2. Enter a name
+3. **Host** a room (public or private) **or** join an existing room using a room code or invite link
+4. Place notes, edit patterns, and control playback together in real time
+5. Song edits, play/stop, and restart commands sync instantly for everyone in the room
+6. See remote cursors showing who is editing where
 
-Hang out, drop room codes, share jams, and find people online:
+**Key shortcuts (in multiplayer):**
+- **Space** — Play / Pause (synced to the whole room)
+- **F** (host only) — Restart song from the beginning for everyone
+- **Ctrl+F** / **Cmd+F** — Restart from start (BeepBox style + room sync)
 
-### → [Join the SevenBox Discord](https://discord.gg/j9HQdatjP)
-
-Use Discord to:
-- Post **“hosting now”** + a room code or invite link  
-- Ask if anyone wants to jam  
-- Share finished songs / exports  
-- Get a heads-up when the free host is waking up (first load can be slow)
+Songs you create are yours. Export them anytime. No account or login required. Works on both desktop and mobile browsers.
 
 ---
 
-## Play online (friends)
-
-**Everyone always uses the same app link:**
-
+## Multiplayer Setup
+Everyone always uses the **same link**:  
 **[https://sevenbox.onrender.com/chipbox.html](https://sevenbox.onrender.com/chipbox.html)**
 
-No install. No same Wi‑Fi. No tunnel. No launcher required for online play.
+- Host a room and share the invite link (example: `https://sevenbox.onrender.com/chipbox.html?room=ABC12`)
+- Or join from the public lobby list
+- Public rooms are visible to everyone. Private rooms use codes.
 
-### How to jam
+**Free host note**: The Render free tier sleeps when idle. First load can take 30–60 seconds. Refresh and wait if needed.
 
-1. Open the app (or join via [Discord](https://discord.gg/j9HQdatjP))  
-2. Enter a **name**  
-3. **Host server** (public or private) **or** join from the public list / room code  
-4. Place notes together — **song edits** and **play/stop** sync for editors  
-5. Optional: **Share invite** to copy a link like  
-   `https://sevenbox.onrender.com/chipbox.html?room=ABC12`
-
-### Free host note
-
-Render’s free tier **sleeps** when idle. The first open after a while can take **30–60 seconds**. After that it should feel normal. If it fails to load, wait a minute and refresh — or say so in Discord.
+For questions, room codes, finding people to jam with, or help — join the Discord:  
+**[Join SevenBox Discord](https://discord.gg/j9HQdatjP)**
 
 ---
 
-## Features
+## Run Locally
+You can run SevenBox completely offline for solo use or development.
 
-- **Pattern tracker** (notes, channels, drums, patterns)  
-- **Multiplayer** rooms: public lobby or private codes  
-- **Host / edit / view** roles  
-- Live **song sync** + **play/stop**  
-- Remote **cursors** (see who’s on the grid)  
-- Works on **phone and desktop** browsers  
-- Songs you make are **yours** (export as usual; no account required)
+### Requirements
+- Python 3.10 or higher
+- Git (to clone the repo)
 
-### Handy keys (multiplayer)
+### Steps
 
-| Key | What |
-|-----|------|
-| **Space** | Play / pause (syncs to the room) |
-| **F** (host) | Restart from the start for everyone |
-| **Ctrl+F** / **Cmd+F** | Restart from start (BeepBox + room sync) |
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/cxt11100/sevenbox.git
+   cd sevenbox
 
----
+Install dependencies:Bashpip install -r requirements.txt
+Start the local server:Bashpython multiplayer/server.py
+Open the app in your browser:
+http://127.0.0.1:8765/chipbox.html
 
-## Run locally (optional)
-
-For solo use or development off the public host:
-
-```bash
-# Python 3.10+ recommended
-pip install -r requirements.txt
-python multiplayer/server.py
-```
-
-Open: [http://127.0.0.1:8765/chipbox.html](http://127.0.0.1:8765/chipbox.html)
-
-Helpers (if present):
-
-```bash
-./start-sevenbox.sh
+Easier Launch (if available)
+Run one of these if present in the folder:
+Bash./start-sevenbox.sh
 # or
 python SevenBox-Launcher.py
-```
+Local Multiplayer (LAN only)
 
-Online multiplayer for friends still uses the **Render URL**, not your PC.
+You use: http://127.0.0.1:8765/chipbox.html
+Friends on the same Wi-Fi use: http://YOUR-PC-IP:8765/chipbox.html
+(Find your local IP with ipconfig (Windows) or ip addr / ifconfig (Linux/Mac))
 
----
+Note: Local multiplayer only works on the same network. For playing with friends over the internet, use the public online host.
 
-## Deploy (permanent free host)
+Project Layout
 
-Stack: **GitHub** + **[Render](https://render.com)** free web service.
 
-1. Push this repo to GitHub  
-2. Render → **New → Blueprint** (reads `render.yaml`)  
-   — or **Web Service**:
-   - **Build:** `pip install -r requirements.txt`  
-   - **Start:** `python multiplayer/server.py --host 0.0.0.0 --port $PORT`  
-   - **Plan:** Free  
-3. Open `https://YOUR-APP.onrender.com/chipbox.html`
 
-More detail: [HOSTING.md](./HOSTING.md).
 
----
 
-## Project layout
 
-| Path | What |
-|------|------|
-| `chipbox.html` | App shell + UI |
-| `chipbox-app.js` | BeepBox engine + multiplayer client |
-| `multiplayer/server.py` | WebSocket server + static files |
-| `render.yaml` | Render free-host config |
-| `requirements.txt` | Python deps (`websockets`) |
-| `silent.wav` | iOS audio keep-alive helper |
-| `HOSTING.md` | Deploy notes |
-| `README.md` | You are here |
 
----
 
-## Credits & ownership
 
-- **SevenBox** — free chiptune editor + multiplayer  
-- **Community:** [Discord](https://discord.gg/j9HQdatjP)  
-- **Owner:** seven  
 
----
 
-## License
 
-Private SevenBox build unless stated otherwise.
 
----
 
-## Support / contact
 
-- **Discord:** [https://discord.gg/j9HQdatjP](https://discord.gg/j9HQdatjP)  
-- **GitHub:** [cxt11100/sevenbox](https://github.com/cxt11100/sevenbox)  
 
-Open the app, hop in Discord, and host a room. That’s the whole loop.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+PathDescriptionchipbox.htmlMain app shell + UIchipbox-app.jsBeepBox engine + multiplayer clientmultiplayer/server.pyWebSocket server + static file servingrender.yamlRender.com free hosting configrequirements.txtPython dependencies (websockets)silent.waviOS audio unlock helperHOSTING.mdDetailed deployment guide
+
+Deploy Your Own Free Host (Optional)
+See HOSTING.md for full instructions on deploying a permanent free instance on Render.
+
+Community & Support
+All further questions, help, hosting issues, jams, and sharing go through the Discord:
+https://discord.gg/j9HQdatjP
+Post “hosting now” + your room code when you open a room.
+Enjoy making chiptune!
