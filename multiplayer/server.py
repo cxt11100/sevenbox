@@ -459,9 +459,9 @@ async def broadcast_room(
 
 
 async def flush_presence(room: Room) -> None:
-    """~40 Hz presence for smoother multiplayer cursors."""
+    """~30 Hz presence batch (smooth cursors, lighter free-tier CPU)."""
     try:
-        await asyncio.sleep(0.025)
+        await asyncio.sleep(0.033)
         if room.code not in rooms or rooms.get(room.code) is not room:
             return
         if not room._presence_dirty:

@@ -1242,6 +1242,8 @@ try {
     var tick = function (nowStamp) {
       cursorRaf = requestAnimationFrame(tick);
       if (!room) return;
+      // Skip heavy cursor paint when tab is hidden
+      try { if (document.hidden) return; } catch (eH) {}
       var now = nowStamp || (performance.now ? performance.now() : Date.now());
       ensurePresenceLayer();
       var myCh = currentChannel();
@@ -1256,6 +1258,15 @@ try {
     };
     cursorRaf = requestAnimationFrame(tick);
   }
+
+  // When tab wakes, push presence so peers snap back to you
+  try {
+    document.addEventListener("visibilitychange", function () {
+      if (!document.hidden && room) {
+        try { sendPresence(true); } catch (e) {}
+      }
+    });
+  } catch (eVis) {}
 
   function stopCursorAnim() {
     if (cursorRaf) cancelAnimationFrame(cursorRaf);
@@ -2225,12 +2236,20 @@ try {
     } catch (e) {}
   }
 
-  // Multiplayer cursors (~40–50 Hz when moving — smoother path, less jump)
+  // Multiplayer cursors — balanced rate; much slower when tab hidden / idle
   var lastPresenceSent = 0;
   var presenceFlushTimer = null;
-  var PRESENCE_MIN_MS = 22;
+  var PRESENCE_MIN_MS = 40;       // ~25 Hz while moving (efficient + smooth)
+  var PRESENCE_HIDDEN_MS = 400;   // tab in background
   var lastSentChannel = -999;
   var lastSentXY = { x: -1, y: -1 };
+
+  function presenceMinMs() {
+    try {
+      if (typeof document !== "undefined" && document.hidden) return PRESENCE_HIDDEN_MS;
+    } catch (e) {}
+    return PRESENCE_MIN_MS;
+  }
 
   function sendPresence(force) {
     if (!room) return;
@@ -2238,12 +2257,13 @@ try {
     var ch = currentChannel() | 0;
     // Always push track switches immediately so the other screen updates fast
     if (ch !== lastSentChannel) force = true;
-    if (!force && (now - lastPresenceSent) < PRESENCE_MIN_MS) {
+    var minMs = presenceMinMs();
+    if (!force && (now - lastPresenceSent) < minMs) {
       if (!presenceFlushTimer) {
         presenceFlushTimer = setTimeout(function () {
           presenceFlushTimer = null;
           sendPresence(true);
-        }, PRESENCE_MIN_MS - (now - lastPresenceSent));
+        }, minMs - (now - lastPresenceSent));
       }
       return;
     }
@@ -2869,7 +2889,10 @@ try {
         if (s && s !== lastApplied) applySong(lastApplied, false, lastRemoteTs || Date.now());
       }
     }, 120);
-    presenceTimer = setInterval(function () { sendPresence(false); }, 200);
+    presenceTimer = setInterval(function () {
+      if (document.hidden) return;
+      sendPresence(false);
+    }, 280);
     pingTimer = setInterval(function () {
       try {
         if (ws && ws.readyState === 1) {

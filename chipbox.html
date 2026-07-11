@@ -122,102 +122,40 @@
 			}
 		}
 	
-/* SevenBox layout — classic dark studio look */
+/* SevenBox = BeepBox classic layout (beepbox.co style) + multiplayer */
 html {
   background: #000 !important;
   font-family: "Roboto", system-ui, "Segoe UI", sans-serif !important;
   font-size: large !important;
-  color: #fff;
+  color: #fff !important;
+  overflow-x: hidden;
 }
 body {
-  margin: 0 !important;
+  margin: 0 auto !important;
   padding: 0 !important;
   min-height: 100vh !important;
   width: 100% !important;
-  display: block !important;
-  align-items: stretch !important;
+  max-width: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
   background: #000 !important;
+  overflow-x: hidden;
 }
 .sb-app {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
   width: 100%;
-  max-width: 710px; /* classic BeepBox chrome width — do not squeeze the grid */
+  max-width: 710px;
   margin: 0 auto;
+  padding: 0 0 2em;
   background: #000;
   box-sizing: border-box;
-}
-.sb-header {
-  position: sticky;
-  top: 0;
-  z-index: 40;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px 16px;
-  background: #000;
-  border-bottom: 1px solid #333;
-  box-shadow: none;
+  flex-direction: column;
+  align-items: stretch;
 }
-.sb-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-.sb-logo {
-  width: 32px;
-  height: 32px;
-  border-radius: 4px;
-  background: #fff;
-  display: grid;
-  place-items: center;
-  font-weight: 800;
-  font-size: 13px;
-  color: #000;
-  letter-spacing: -0.02em;
-  flex-shrink: 0;
-}
-.sb-brand-text h1 {
-  margin: 0 !important;
-  font-size: 1.35rem !important;
-  font-weight: 700 !important;
-  letter-spacing: 0;
-  color: #fff !important;
-  text-align: left !important;
-  background: none !important;
-  -webkit-text-fill-color: unset !important;
-}
-.sb-brand-text p {
-  margin: 1px 0 0 !important;
-  font-size: 12px;
-  color: #aaa;
-}
-.sb-brand-text strong { color: #ddd; font-weight: 600; }
-.sb-header-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-.sb-header-actions a, .sb-header-actions button {
-  font-size: 12px;
-  padding: 6px 10px;
-  border-radius: 4px;
-  border: 1px solid #555;
-  background: #111;
-  color: #eee;
-  text-decoration: none;
-  cursor: pointer;
-  font-family: inherit;
-}
-.sb-header-actions a:hover, .sb-header-actions button:hover {
-  border-color: #888;
-  color: #fff;
-}
+/* hide old chrome if leftover */
+.sb-header, .sb-stage-label, #bbn-studio { display: none !important; }
+.sb-main, .sb-stage { display: contents; }
 .sb-header-actions a.sb-ext { display: none !important; }
 .sb-main {
   flex: 1;
@@ -255,31 +193,23 @@ body {
 .sb-stage-label span { color: #ccc; }
 #beepboxEditorContainer {
   width: 100% !important;
+  max-width: 710px !important;
   min-height: 645px;
-  margin: 0 !important;
-  padding: 4px 0 8px 0 !important;
+  margin: 0 auto !important;
+  padding: 0 !important;
   background: var(--editor-background, #000) !important;
   border-radius: 0 !important;
   border: none !important;
   box-shadow: none !important;
-  /* scroll if needed — never shrink/squash BeepBox SVG grids */
   overflow-x: auto !important;
-  overflow-y: auto !important;
+  overflow-y: visible !important;
   box-sizing: border-box !important;
   -webkit-overflow-scrolling: touch;
   position: relative !important;
 }
-/* Do NOT force max-width/height on editor SVGs — that halves the music grid */
+/* Studio strip hidden — classic BeepBox has no purple toolbar */
 #bbn-studio {
-  width: 100%;
-  max-width: 100%;
-  margin: 0;
-  padding: 12px 14px 14px;
-  border-top: 1px solid #333;
-  background: #0a0a0a;
-  color: #ddd;
-  box-sizing: border-box;
-  overflow-x: hidden;
+  display: none !important;
 }
 #bbn-studio .bbn-row {
   display: flex;
@@ -341,52 +271,52 @@ body {
 }
 #text-content {
   width: 100% !important;
-  max-width: none !important;
-  padding: 18px 4px 8px !important;
-  background: transparent !important;
-  display: none;
+  max-width: 710px !important;
+  padding: 8px 16px 24px !important;
+  background: #000 !important;
+  display: block !important;
   overflow: visible !important;
+  box-sizing: border-box;
 }
-#text-content.bbn-open { display: block; }
+#text-content.bbn-open { display: block !important; }
 #text-content h1 {
-  font-size: 1.5rem !important;
+  font-size: 1.7rem !important;
   font-weight: 700 !important;
-  color: #f2ecff !important;
-  text-align: left !important;
-  margin: 0 0 0.4em !important;
+  color: #fff !important;
+  text-align: center !important;
+  margin: 0.5em 0 !important;
+  -webkit-text-stroke-width: 0;
 }
 #text-content h2 {
-  font-size: 1.05rem !important;
-  text-align: left !important;
-  color: #e8dfff !important;
-  margin: 1.2em 0 0.4em !important;
+  font-size: 1.5rem !important;
+  text-align: center !important;
+  color: #fff !important;
+  margin: 0.5em 0 !important;
+  -webkit-text-stroke-width: 0;
 }
 #text-content p, #text-content li {
-  color: #9a8fb8;
-  line-height: 1.55;
-  margin: 0.4em 0;
+  color: #ccc;
+  line-height: 1.45;
+  margin: 0.5em 0;
+  font-size: 1rem;
 }
 #text-content a {
-  color: #7ae7ff !important;
-  text-decoration: none;
-  border-bottom: 1px solid rgba(122, 231, 255, 0.35);
+  color: #98f !important;
+  text-decoration: underline;
+  border: none !important;
 }
-#text-content a:hover { border-bottom-color: #7ae7ff; }
+#text-content a:hover { color: #baf !important; }
 .bbn-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin: 0.9em 0 0.6em;
+  display: none; /* classic BeepBox uses prose, not cards */
 }
 @media (max-width: 640px) {
-  .bbn-grid { grid-template-columns: 1fr; }
-  .sb-header { padding: 10px 12px; }
-  .sb-main { padding: 10px 8px; }
+  .bbn-grid { display: none; }
+  #text-content { padding: 8px 12px 20px !important; }
 }
 .bbn-card {
-  background: #141022;
-  border: 1px solid rgba(155, 109, 255, 0.18);
-  border-radius: 10px;
+  background: #111;
+  border: 1px solid #333;
+  border-radius: 4px;
   padding: 11px 12px;
   text-align: left;
 }
@@ -402,25 +332,28 @@ body {
   line-height: 1.35;
 }
 .sb-footer {
-  margin-top: auto;
-  padding: 18px 20px 22px;
-  border-top: 1px solid rgba(155, 109, 255, 0.15);
-  background: #0a0812;
-  color: #8a80a8;
+  margin-top: 0.5em;
+  padding: 16px 16px 24px;
+  border-top: 1px solid #333;
+  background: #000;
+  color: #888;
   font-size: 12.5px;
   line-height: 1.55;
+  width: 100%;
+  box-sizing: border-box;
 }
 .sb-footer-inner {
-  max-width: 920px;
+  max-width: 710px;
   margin: 0 auto;
   display: grid;
-  gap: 10px;
+  gap: 8px;
+  text-align: center;
 }
-.sb-footer strong { color: #d8d0f0; font-weight: 600; }
+.sb-footer strong { color: #ddd; font-weight: 600; }
 .sb-footer a {
-  color: #7ae7ff;
-  text-decoration: none;
-  border-bottom: 1px solid rgba(122, 231, 255, 0.3);
+  color: #98f;
+  text-decoration: underline;
+  border: none;
 }
 .sb-footer a:hover { border-bottom-color: #7ae7ff; }
 .sb-credits {
@@ -1163,7 +1096,7 @@ body {
   .sb-app { max-width: 100% !important; width: 100% !important; }
 }
 
-/* SevenBox multiplayer UI — simple stacked connect flow */
+/* Multiplayer panel — matches classic BeepBox black chrome */
 .sb-mp {
   display: flex;
   flex-direction: column;
@@ -1171,9 +1104,11 @@ body {
   gap: 10px;
   align-items: stretch;
   padding: 12px 14px 14px;
-  border-top: 1px solid #333;
-  background: #0a0a0a;
-  font-size: 12px;
+  border: 1px solid #333;
+  border-radius: 0;
+  margin: 0 0 8px;
+  background: #000;
+  font-size: 13px;
   color: #ccc;
   width: 100%;
   max-width: 100%;
@@ -1183,10 +1118,10 @@ body {
 }
 .sb-mp .sb-mp-title {
   font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  font-size: 11px;
-  color: #aaa;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  font-size: 1.1rem;
+  color: #fff;
   margin: 0;
 }
 .sb-mp-head {
@@ -1932,44 +1867,12 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
   <p class="sb-err" id="sb-splash-err"></p>
 </div>
 <div class="sb-app">
-  <header class="sb-header">
-    <div class="sb-brand">
-      <div class="sb-logo">SB</div>
-      <div class="sb-brand-text">
-        <h1>SevenBox</h1>
-        <p>Free online chiptune song editor</p>
-      </div>
-    </div>
-    <div class="sb-header-actions">
-      <button type="button" id="bbn-tips-top">Instructions</button>
-    </div>
-  </header>
+  <!-- Classic BeepBox order: editor first, then multiplayer, then instructions -->
+  <div id="beepboxEditorContainer">
+    <noscript>Sorry, SevenBox needs JavaScript on to run.</noscript>
+  </div>
 
-  <main class="sb-main">
-    <div class="sb-stage">
-      <div class="sb-stage-label">
-        <span>Editor</span>
-        <span style="color:#888;letter-spacing:0.02em;text-transform:none;font-weight:500">click the grid · patterns · loop bar</span>
-      </div>
-      <div id="beepboxEditorContainer">
-        <noscript>Sorry, SevenBox needs JavaScript on to run.</noscript>
-      </div>
-      <div id="bbn-studio">
-        <div class="bbn-row">
-          <div class="bbn-badge"><i></i> Quick guide</div>
-          <div class="bbn-how">
-            <strong>1.</strong> Place notes ·
-            <strong>2.</strong> Patterns ·
-            <strong>3.</strong> Loop ·
-            <span class="bbn-k">Space</span> play
-          </div>
-          <button type="button" id="bbn-tips">Show tips</button>
-        </div>
-      </div>
-
-      
-      
-      <div class="sb-mp" id="sb-mp">
+  <div class="sb-mp" id="sb-mp">
         <div class="sb-mp-head">
           <span class="sb-mp-title">Multiplayer</span>
           <div id="sb-online-bar" title="People connected to SevenBox right now">
@@ -2079,96 +1982,89 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
         </div>
       </div>
 
-    </div>
+    <div id="text-content" class="bbn-open">
+      <h1>SevenBox</h1>
+      <p>
+        SevenBox is an online tool for sketching and sharing instrumental music —
+        like <a href="https://www.beepbox.co/" target="_blank" rel="noopener">BeepBox</a>,
+        with <strong>live multiplayer</strong> so friends can jam in the same song.
+      </p>
+      <p>
+        All song data is in your browser. When you play multipplayer, the room keeps everyone in sync.
+        Songs you create are yours — export anytime. Free to use.
+      </p>
 
-    <div id="text-content">
-      <section>
-        <h1>About SevenBox</h1>
-        <p>
-          SevenBox is a free online chiptune song editor. Make instrumental tracks in your browser,
-          host a multiplayer room, and jam with friends. No account required — songs you create are yours.
-        </p>
-        <div class="bbn-grid">
-          <div class="bbn-card"><strong>Notes</strong><span>Click the gray rows at the top. Drag sideways to change note length.</span></div>
-          <div class="bbn-card"><strong>Patterns</strong><span>Numbered boxes under the grid rearrange the song structure.</span></div>
-          <div class="bbn-card"><strong>Loop</strong><span>The loop bar sets which bars repeat. Drag the ends to cover more bars.</span></div>
-          <div class="bbn-card"><strong>Drums</strong><span>Bottom channel row is drums. Rows above = melody &amp; harmony.</span></div>
-        </div>
-      </section>
-      <section>
-        <h2>Keyboard</h2>
-        <p>
-          <span class="bbn-k">Space</span> play/pause (syncs in multiplayer) ·
-          <span class="bbn-k">Ctrl</span>+<span class="bbn-k">F</span> restart song for everyone ·
-          <span class="bbn-k">Z</span> undo ·
-          <span class="bbn-k">Y</span> redo ·
-          <span class="bbn-k">C</span>/<span class="bbn-k">V</span> copy/paste ·
-          <span class="bbn-k">0–9</span> pattern ·
-          <span class="bbn-k">Arrows</span> move selection
-        </p>
-      </section>
-      <section>
-        <h2>Multiplayer</h2>
-        <p>
-          Open SevenBox (same link every time). Enter a name → <strong>Host server</strong> or join a public room / code.
-          Use <strong>Share invite</strong> to copy a link with the room code for friends.
-          Everyone edits the same song in the browser. No install and no same Wi‑Fi required.
-        </p>
-        <p style="color:#888;font-size:13px;margin-top:8px">
-          Simple path: name → Join a public room or Create room → Copy invite link.
-          Extra tools live under More options / Jam tools.
-        </p>
-      </section>
+      <h2>Multiplayer</h2>
+      <p>
+        Enter a name (nickname + 3–5 numbers, e.g. jam482) →
+        <strong>Join</strong> a public room or <strong>Create room</strong> →
+        <strong>Copy invite link</strong> for friends.
+        Space play/pause and edits sync for everyone in the room.
+      </p>
 
-      <details class="sb-updates" id="sb-updates" open>
+      <h2>Instructions</h2>
+      <p>
+        You can add or remove notes by clicking on the gray rows at the top.
+        SevenBox automatically plays the notes out loud for you. Try it!
+      </p>
+      <p>
+        Notes go into patterns, and you can edit one pattern at a time.
+        Those numbered boxes at the bottom of the editor are the different patterns you can edit.
+        Click the boxes to move to a different part of the song, or click the arrows on the currently selected box
+        to swap which pattern is played during that part of the song.
+      </p>
+      <p>
+        SevenBox can play several rows of patterns simultaneously, and each row has its own set of patterns.
+        Most rows can play melodies or harmonies, but the bottom row is for drums.
+      </p>
+      <p>
+        The purple loop underneath the numbered boxes controls which part of the song is currently repeating.
+        Move the loop to listen to a different part of the song, or drag the ends to expand the loop to include the whole song.
+      </p>
+      <p>
+        When the editor has focus, you can use these keyboard shortcuts:
+      </p>
+      <ul>
+        <li><strong>Spacebar</strong>: play or pause the song (syncs in multipplayer)</li>
+        <li><strong>Ctrl/Cmd + F</strong>: restart from the start for everyone in the room</li>
+        <li><strong>Z</strong>: undo · <strong>Y or Shift Z</strong>: redo</li>
+        <li><strong>C / V</strong>: copy / paste selected pattern(s)</li>
+        <li><strong>0–9</strong>: assign pattern number to selection</li>
+        <li><strong>Arrows</strong>: move selection</li>
+      </ul>
+      <p>
+        In the note pattern editor, click and drag horizontally on a note to adjust its duration.
+        Click above or below an existing note to add more notes to a chord.
+      </p>
+
+      <h2>About</h2>
+      <p>
+        SevenBox is based on the BeepBox editor by
+        <a href="https://johnnesky.com/" target="_blank" rel="noopener">John Nesky</a>,
+        with multipplayer rooms added for live jams.
+        Neither SevenBox nor BeepBox claim ownership of songs you create.
+      </p>
+      <p>
+        Engine version label: <strong>sevebox 4.2.2</strong>.
+      </p>
+
+      <details class="sb-updates" id="sb-updates">
         <summary>Update board</summary>
         <div class="sb-updates-body">
           <div class="sb-update-item">
-            <div class="when">2026-07-11 · mp53</div>
+            <div class="when">2026-07-11 · mp55</div>
             <div class="what">
-              <strong>Cleaner name gate.</strong>
-              Empty name box (no old junk like seven22222222). Clear steps for nickname + numbers.
+              <strong>Classic BeepBox layout + efficiency.</strong>
+              Page matches beepbox.co style; multipplayer under the editor; lighter presence when idle/tab hidden.
             </div>
           </div>
           <div class="sb-update-item">
-            <div class="when">2026-07-11 · mp52</div>
-            <div class="what">
-              <strong>Unique names.</strong>
-              Nickname + 3–5 numbers required. Duplicate names blocked online.
-            </div>
+            <div class="when">2026-07-11 · mp54</div>
+            <div class="what"><strong>Track color swatches</strong> on player chips instead of “track N” text.</div>
           </div>
           <div class="sb-update-item">
-            <div class="when">2026-07-11 · mp51</div>
-            <div class="what">
-              <strong>Simpler multipplayer.</strong>
-              Public rooms list first, big Create / Join buttons, advanced tools tucked under More / Jam tools.
-            </div>
-          </div>
-          <div class="sb-update-item">
-            <div class="when">2026-07-11 · mp50</div>
-            <div class="what">
-              <strong>Jam tools + update board.</strong>
-              Status, follow, freeze, track claims, reactions, QR invite, jam tape, song hash badge.
-              Version label is now <strong>sevebox 4.2.2</strong>.
-            </div>
-          </div>
-          <div class="sb-update-item">
-            <div class="when">2026-07-11 · mp49</div>
-            <div class="what">
-              <strong>Tighter playhead timing</strong> — lag-compensated play start, soft mid-play align, faster play/stop.
-            </div>
-          </div>
-          <div class="sb-update-item">
-            <div class="when">2026-07-11 · mp48</div>
-            <div class="what">
-              <strong>Smoother multipplayer cursors</strong> — chase follow instead of jump/coast.
-            </div>
-          </div>
-          <div class="sb-update-item">
-            <div class="when">2026-07-11 · mp47</div>
-            <div class="what">
-              <strong>Public rooms list</strong> — simpler rows; your server shows <em>You're here</em> (can't rejoin own room).
-            </div>
+            <div class="when">2026-07-11 · mp53–mp52</div>
+            <div class="what"><strong>Unique names</strong> (nickname + 3–5 numbers) and clean empty name gate.</div>
           </div>
           <div class="sb-update-item">
             <div class="when">Earlier</div>
@@ -2179,15 +2075,15 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
         </div>
       </details>
     </div>
-  </main>
 
   <footer class="sb-footer">
     <div class="sb-footer-inner">
       <div>
         <strong>SevenBox</strong> — free online chiptune editor with multiplayer rooms.
+        Based on BeepBox by John Nesky.
       </div>
       <div class="sb-credits">
-        <span>sevebox 4.2.2 · sevenbox</span>
+        <span>sevebox 4.2.2</span>
       </div>
     </div>
   </footer>
@@ -2296,7 +2192,7 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
 
   // Native script load — Safari handles this much better than fetch+eval
   var s = document.createElement("script");
-  s.src = "chipbox-app.js?v=mp54";
+  s.src = "chipbox-app.js?v=mp55";
   s.async = false;
   s.onload = function () {
     setMsg("Engine loaded — starting…");
