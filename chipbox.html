@@ -464,9 +464,10 @@ body {
 }
 
 /*
- * Remote player mark = BeepBox --playhead (4px).
- * On their channel row at playhead X; name top-left.
- * Same channel as you → ghost.
+ * Remote player = BeepBox playhead bar (4px pink) on THEIR channel row.
+ * Color is set in JS from BeepBox's real --playhead (CSS var is often scoped
+ * under the editor, so body overlays can't see it without that).
+ * Name sits top-left of the bar. Same channel as you → ghost bar.
  */
 .sb-playhead-mark {
   position: fixed;
@@ -475,37 +476,45 @@ body {
   pointer-events: none;
   z-index: 99941;
   box-sizing: border-box;
-  border: none;
-  border-radius: 0;
-  background: var(--playhead, #ff4fd8);
-  opacity: 1;
   display: none;
 }
 .sb-playhead-mark.sb-on { display: block; }
-.sb-playhead-mark.same-ch {
-  opacity: 0.32;
-  background: var(--playhead, #ff4fd8);
+.sb-playhead-mark .sb-ph-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 4px;
+  height: 100%;
+  border: none;
+  border-radius: 0;
+  /* BeepBox playhead is a solid 4px rect — color applied inline from theme */
+  background: #ff4fd8;
+  box-shadow: none;
 }
-.sb-playhead-mark.dim-ch {
-  opacity: 0.95;
+.sb-playhead-mark.same-ch .sb-ph-bar {
+  opacity: 0.3; /* ghost when both on same channel */
+}
+.sb-playhead-mark.dim-ch .sb-ph-bar {
+  opacity: 1;
 }
 .sb-playhead-mark .sb-ph-name {
   position: absolute;
   left: 0;
   top: 0;
-  transform: translate(0, -100%);
-  padding: 0 0 2px 0;
-  font: 800 11px/1.15 system-ui, -apple-system, "Segoe UI", sans-serif;
-  color: var(--playhead, #ff4fd8);
+  transform: translate(0, calc(-100% - 1px));
+  padding: 0;
+  margin: 0;
+  font: 800 11px/1.1 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #ff4fd8;
   white-space: nowrap;
-  max-width: 100px;
+  max-width: 110px;
   overflow: hidden;
   text-overflow: ellipsis;
-  text-shadow: 0 0 5px #000, 0 1px 2px #000, 0 0 1px #000;
+  text-shadow: 0 0 4px #000, 0 1px 2px #000;
   pointer-events: none;
 }
 .sb-playhead-mark.same-ch .sb-ph-name {
-  opacity: 0.85;
+  opacity: 0.55;
 }
 
 /* Discord-style typing line above chat input */
@@ -1823,7 +1832,7 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
 
   // Native script load — Safari handles this much better than fetch+eval
   var s = document.createElement("script");
-  s.src = "chipbox-app.js?v=mp35";
+  s.src = "chipbox-app.js?v=mp36";
   s.async = false;
   s.onload = function () {
     setMsg("Engine loaded — starting…");
