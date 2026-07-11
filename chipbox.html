@@ -451,10 +451,7 @@ body {
   overflow: hidden;
   box-sizing: border-box;
 }
-/* No multiplayer mouse arrows — presence is BeepBox playhead-style only */
-.sb-remote-cursor { display: none !important; }
-
-/* Fixed overlay so marks aren't clipped by editor overflow (was hiding remotes) */
+/* Fixed overlay: remote cursors + playhead track marks (not clipped by editor) */
 #sb-presence-layer {
   position: fixed;
   inset: 0;
@@ -462,6 +459,59 @@ body {
   z-index: 99940;
   overflow: hidden;
 }
+
+/* Simple multiplayer mouse cursor (other players) */
+.sb-remote-cursor {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 99942;
+  --line: #ff5ec8;
+  display: none;
+  transform: translate(-1px, -1px);
+}
+.sb-remote-cursor.sb-on { display: block; }
+.sb-remote-cursor .sb-cur-arrow {
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 0 16px 12px;
+  border-color: transparent transparent transparent var(--line);
+  filter: drop-shadow(0 0 1px #000) drop-shadow(1px 1px 0 rgba(0,0,0,0.9));
+}
+.sb-remote-cursor .sb-cur-label {
+  position: absolute;
+  left: 14px;
+  top: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font: 800 10px/1.2 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #1a1020;
+  background: var(--line);
+  white-space: nowrap;
+  max-width: 100px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.45);
+}
+.sb-remote-cursor .sb-cur-label .sb-cur-name {
+  max-width: 70px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sb-remote-cursor .sb-cur-label .sb-cur-ch {
+  font: 800 9px/1 system-ui, sans-serif;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: rgba(0,0,0,0.22);
+  color: #fff;
+}
+.sb-remote-cursor.same-ch { opacity: 0.65; }
+.sb-remote-cursor.dim-ch { opacity: 0.95; }
 
 /*
  * Remote player presence on the TRACK GRID (pattern boxes), not a full-height
