@@ -554,15 +554,15 @@ body {
 #sb-mp-lobby {
   width: 100%;
   max-width: 100%;
-  margin-top: 10px;
-  border-top: 1px solid #2a2a2a;
-  padding-top: 10px;
+  margin-top: 0;
+  border-top: none;
+  padding-top: 0;
   box-sizing: border-box;
   overflow-x: hidden;
   min-width: 0;
 }
 #sb-mp-lobby h3 {
-  margin: 0 0 8px;
+  margin: 0;
   font-size: 11px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -1124,13 +1124,14 @@ body {
   .sb-app { max-width: 100% !important; width: 100% !important; }
 }
 
-/* SevenBox multiplayer UI — classic dark (same width as editor, no side gap) */
+/* SevenBox multiplayer UI — simple stacked connect flow */
 .sb-mp {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  padding: 10px 14px;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 10px;
+  align-items: stretch;
+  padding: 12px 14px 14px;
   border-top: 1px solid #333;
   background: #0a0a0a;
   font-size: 12px;
@@ -1143,34 +1144,163 @@ body {
 }
 .sb-mp .sb-mp-title {
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   font-size: 11px;
-  color: #ccc;
-  margin-right: 4px;
+  color: #aaa;
+  margin: 0;
 }
+.sb-mp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.sb-mp-section {
+  width: 100%;
+  box-sizing: border-box;
+}
+.sb-mp-section-label {
+  margin: 0 0 6px;
+  font: 700 11px/1.2 system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #666;
+}
+.sb-mp-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+}
+.sb-mp-row > * { min-width: 0; }
 .sb-mp input[type="text"] {
   background: #111;
   border: 1px solid #444;
-  border-radius: 4px;
+  border-radius: 6px;
   color: #eee;
-  padding: 6px 10px;
-  font-size: 12px;
+  padding: 8px 12px;
+  font-size: 13px;
   font-family: ui-monospace, monospace;
   width: 100px;
+  box-sizing: border-box;
 }
-.sb-mp input.sb-mp-name { width: 110px; font-family: inherit; }
+.sb-mp input.sb-mp-name {
+  width: min(200px, 100%);
+  flex: 1 1 140px;
+  font-family: inherit;
+}
+.sb-mp input#sb-mp-code {
+  width: 7em;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+.sb-mp input#sb-mp-title {
+  flex: 1 1 160px;
+  min-width: 120px;
+  font-family: inherit;
+}
 .sb-mp button {
   background: #1a1a1a;
   color: #eee;
   border: 1px solid #555;
-  border-radius: 4px;
-  padding: 6px 10px;
-  font-size: 12px;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
   cursor: pointer;
   font-family: inherit;
+  min-height: 36px;
+  box-sizing: border-box;
 }
 .sb-mp button:hover { border-color: #888; }
+.sb-mp button.primary {
+  min-height: 38px;
+  font-weight: 700;
+}
+.sb-mp button.sb-btn-wide {
+  flex: 1 1 160px;
+  width: 100%;
+  max-width: 100%;
+}
+.sb-mp #sb-mp-connect.sb-hidden,
+.sb-mp #sb-mp-inroom.sb-hidden,
+.sb-mp .sb-hidden { display: none !important; }
+.sb-mp #sb-mp-inroom { width: 100%; }
+.sb-mp-inroom-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid rgba(109,255,168,0.25);
+  border-radius: 8px;
+  background: rgba(109,255,168,0.06);
+  box-sizing: border-box;
+}
+.sb-mp-inroom-bar .sb-inroom-label {
+  flex: 1 1 140px;
+  font-size: 13px;
+  color: #c8ffe0;
+  font-weight: 600;
+}
+.sb-mp-lobby-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.sb-mp-lobby-head h3 {
+  margin: 0 !important;
+  font-size: 11px !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #888;
+  font-weight: 700;
+}
+.sb-mp-lobby-head button {
+  min-height: 30px;
+  padding: 5px 10px;
+  font-size: 11px;
+}
+.sb-mp details.sb-mp-more {
+  width: 100%;
+  border: 1px solid #222;
+  border-radius: 8px;
+  background: #0c0c0c;
+  padding: 0;
+  box-sizing: border-box;
+}
+.sb-mp details.sb-mp-more > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 10px 12px;
+  font: 600 12px/1 system-ui, sans-serif;
+  color: #888;
+  user-select: none;
+}
+.sb-mp details.sb-mp-more > summary::-webkit-details-marker { display: none; }
+.sb-mp details.sb-mp-more > summary::after {
+  content: " +";
+  color: #6dffa8;
+  float: right;
+}
+.sb-mp details.sb-mp-more[open] > summary::after { content: " −"; }
+.sb-mp details.sb-mp-more .sb-mp-more-body {
+  padding: 0 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sb-mp .sb-jam-tools {
+  border-top: none;
+  margin-top: 0;
+  padding-top: 0;
+}
 .sb-mp button.primary {
   background: #222;
   border-color: #888;
@@ -1793,71 +1923,112 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
       
       
       <div class="sb-mp" id="sb-mp">
-        <span class="sb-mp-title">Multiplayer</span>
-        <div id="sb-online-bar" title="People connected to SevenBox right now">
-          <span class="sb-on-pill"><span class="sb-on-live" aria-hidden="true"></span> Online <span class="n" id="sb-online-count">—</span></span>
-          <span class="sb-on-meta"><span id="sb-online-inrooms">0</span> in rooms · <span id="sb-online-rooms">0</span> rooms · <span id="sb-online-public">0</span> public</span>
-        </div>
-        <input class="sb-mp-name" id="sb-mp-name" type="text" maxlength="24" placeholder="your name" />
-        <div class="sb-mp-host-opts">
-          <input id="sb-mp-title" type="text" maxlength="40" placeholder="Title (blank = random)" />
-          <select class="sb-mp-role" id="sb-mp-visibility" title="Public = on server list">
-            <option value="public" selected>Public</option>
-            <option value="private">Private</option>
-          </select>
-          <select class="sb-mp-role" id="sb-mp-default-role" title="What joiners can do">
-            <option value="edit">Joiners: Edit</option>
-            <option value="view">Joiners: View only</option>
-          </select>
-          <button type="button" class="primary" id="sb-mp-create">Host server</button>
-        </div>
-        <input id="sb-mp-code" type="text" maxlength="6" placeholder="CODE" style="text-transform:uppercase" autocomplete="off" />
-        <button type="button" id="sb-mp-join">Join code</button>
-        <button type="button" id="sb-mp-leave" disabled>Leave</button>
-        <button type="button" id="sb-mp-share" title="Copy invite link for friends">Share invite</button>
-        <button type="button" id="sb-mp-refresh">Refresh list</button>
-        <button type="button" id="sb-mp-apply-role" title="Host: apply joiner permission to everyone in room">Apply perms</button>
-        <span class="sb-mp-status" id="sb-mp-status"><span class="sb-mp-dot"></span>Online host — host a room or join by list/code</span>
-        <div class="sb-mp-banner" id="sb-mp-banner">Same link for everyone. Host or join by list/code. Song + play/stop sync. Blank title = random name. Free host may take ~30–60s to wake.</div>
-        <div id="sb-mp-peers"></div>
-        <div class="sb-jam-tools" id="sb-jam-tools" title="Room jam tools">
-          <select id="sb-mp-status" title="Your jam status">
-            <option value="edit">✏️ Editing</option>
-            <option value="listen">🎧 Listening</option>
-            <option value="afk">💤 AFK</option>
-          </select>
-          <select id="sb-mp-follow" title="Spectator follow — match their track">
-            <option value="">Follow: off</option>
-          </select>
-          <button type="button" id="sb-mp-freeze" title="Host: freeze song edits (chat/cursors stay)">Freeze</button>
-          <button type="button" id="sb-mp-react-clap" title="React">👏</button>
-          <button type="button" id="sb-mp-react-fire" title="React">🔥</button>
-          <button type="button" id="sb-mp-react-spark" title="React">✨</button>
-          <button type="button" id="sb-mp-qr" title="Show room QR for friends nearby">QR invite</button>
-          <button type="button" id="sb-mp-jamlog-toggle" title="Session jam tape">Jam tape</button>
-          <span class="sb-hash-badge idle" id="sb-mp-hash" title="Song sync hash">hash —</span>
-          <select id="sb-mp-track-owner" title="Host: who owns current track claim display">
-            <option value="">Track claim: free</option>
-          </select>
-          <button type="button" id="sb-mp-track-claim" title="Claim your current track">Claim track</button>
-          <button type="button" id="sb-mp-track-clear" title="Host: clear all track claims">Clear claims</button>
-        </div>
-        <div id="sb-mp-jamlog" aria-label="Jam session log"></div>
-        <div id="sb-mp-chat" aria-label="Room chat">
-          <div class="sb-chat-head">
-            <span>Room chat</span>
-            <button type="button" class="sb-chat-clear" id="sb-mp-chat-clear" title="Owner only: clear chat">Clear</button>
+        <div class="sb-mp-head">
+          <span class="sb-mp-title">Multiplayer</span>
+          <div id="sb-online-bar" title="People connected to SevenBox right now">
+            <span class="sb-on-pill"><span class="sb-on-live" aria-hidden="true"></span> Online <span class="n" id="sb-online-count">—</span></span>
+            <span class="sb-on-meta"><span id="sb-online-inrooms">0</span> in rooms · <span id="sb-online-rooms">0</span> rooms · <span id="sb-online-public">0</span> public</span>
           </div>
-          <div id="sb-mp-chat-log"></div>
-          <div id="sb-mp-chat-typing" aria-live="polite"></div>
-          <form id="sb-mp-chat-form" autocomplete="off">
-            <input id="sb-mp-chat-input" type="text" maxlength="180" placeholder="Message the room…" disabled />
-            <button type="submit" id="sb-mp-chat-send" disabled>Send</button>
-          </form>
         </div>
-        <div id="sb-mp-lobby">
-          <h3>Public rooms</h3>
+
+        <span class="sb-mp-status" id="sb-mp-status"><span class="sb-mp-dot"></span>Pick a public room, or create one and share the link.</span>
+        <div class="sb-mp-banner" id="sb-mp-banner">Same link for everyone. First load may take ~30–60s if the free host is waking up.</div>
+
+        <div class="sb-mp-section">
+          <div class="sb-mp-section-label">Your name</div>
+          <div class="sb-mp-row">
+            <input class="sb-mp-name" id="sb-mp-name" type="text" maxlength="24" placeholder="Type your name" autocomplete="nickname" />
+          </div>
+        </div>
+
+        <!-- Always visible: room list is the main path -->
+        <div id="sb-mp-lobby" class="sb-mp-section">
+          <div class="sb-mp-lobby-head">
+            <h3>Public rooms</h3>
+            <button type="button" id="sb-mp-refresh">Refresh</button>
+          </div>
           <div id="sb-mp-lobby-list"><div class="sb-srv-empty">Connecting…</div></div>
+        </div>
+
+        <!-- Solo only: create + code + more -->
+        <div id="sb-mp-connect" class="sb-mp-section">
+          <div class="sb-mp-section-label">Or create your own</div>
+          <div class="sb-mp-row">
+            <button type="button" class="primary sb-btn-wide" id="sb-mp-create">Create room</button>
+          </div>
+          <div class="sb-mp-section-label" style="margin-top:10px">Have a code?</div>
+          <div class="sb-mp-row">
+            <input id="sb-mp-code" type="text" maxlength="6" placeholder="CODE" style="text-transform:uppercase" autocomplete="off" />
+            <button type="button" class="primary" id="sb-mp-join">Join</button>
+          </div>
+          <details class="sb-mp-more" style="margin-top:10px">
+            <summary>More options</summary>
+            <div class="sb-mp-more-body">
+              <div class="sb-mp-row sb-mp-host-opts">
+                <input id="sb-mp-title" type="text" maxlength="40" placeholder="Room title (blank = random)" />
+                <select class="sb-mp-role" id="sb-mp-visibility" title="Public = on server list">
+                  <option value="public" selected>Public</option>
+                  <option value="private">Private</option>
+                </select>
+                <select class="sb-mp-role" id="sb-mp-default-role" title="What joiners can do">
+                  <option value="edit">Joiners can edit</option>
+                  <option value="view">Joiners view only</option>
+                </select>
+                <button type="button" id="sb-mp-apply-role" title="Host: apply joiner permission to everyone in room">Apply perms</button>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        <!-- In room only -->
+        <div id="sb-mp-inroom" class="sb-mp-section sb-hidden">
+          <div class="sb-mp-inroom-bar">
+            <span class="sb-inroom-label" id="sb-mp-inroom-label">In a room</span>
+            <button type="button" class="primary" id="sb-mp-share" title="Copy invite link for friends">Copy invite link</button>
+            <button type="button" id="sb-mp-leave" disabled>Leave</button>
+          </div>
+          <div id="sb-mp-peers"></div>
+          <div id="sb-mp-chat" aria-label="Room chat">
+            <div class="sb-chat-head">
+              <span>Room chat</span>
+              <button type="button" class="sb-chat-clear" id="sb-mp-chat-clear" title="Owner only: clear chat">Clear</button>
+            </div>
+            <div id="sb-mp-chat-log"></div>
+            <div id="sb-mp-chat-typing" aria-live="polite"></div>
+            <form id="sb-mp-chat-form" autocomplete="off">
+              <input id="sb-mp-chat-input" type="text" maxlength="180" placeholder="Message the room…" disabled />
+              <button type="submit" id="sb-mp-chat-send" disabled>Send</button>
+            </form>
+          </div>
+          <details class="sb-mp-more" style="margin-top:8px">
+            <summary>Jam tools</summary>
+            <div class="sb-mp-more-body">
+              <div class="sb-jam-tools" id="sb-jam-tools" title="Room jam tools">
+                <select id="sb-mp-status" title="Your jam status">
+                  <option value="edit">✏️ Editing</option>
+                  <option value="listen">🎧 Listening</option>
+                  <option value="afk">💤 AFK</option>
+                </select>
+                <select id="sb-mp-follow" title="Spectator follow — match their track">
+                  <option value="">Follow: off</option>
+                </select>
+                <button type="button" id="sb-mp-freeze" title="Host: freeze song edits (chat/cursors stay)">Freeze</button>
+                <button type="button" id="sb-mp-react-clap" title="React">👏</button>
+                <button type="button" id="sb-mp-react-fire" title="React">🔥</button>
+                <button type="button" id="sb-mp-react-spark" title="React">✨</button>
+                <button type="button" id="sb-mp-qr" title="Show room QR for friends nearby">QR invite</button>
+                <button type="button" id="sb-mp-jamlog-toggle" title="Session jam tape">Jam tape</button>
+                <span class="sb-hash-badge idle" id="sb-mp-hash" title="Song sync hash">hash —</span>
+                <select id="sb-mp-track-owner" title="Track claims">
+                  <option value="">Track claims: free</option>
+                </select>
+                <button type="button" id="sb-mp-track-claim" title="Claim your current track">Claim track</button>
+                <button type="button" id="sb-mp-track-clear" title="Host: clear all track claims">Clear claims</button>
+                <button type="button" id="sb-mp-apply-role-inroom" title="Host: apply joiner permission to everyone">Apply perms</button>
+              </div>
+              <div id="sb-mp-jamlog" aria-label="Jam session log"></div>
+            </div>
+          </details>
         </div>
       </div>
 
@@ -1897,14 +2068,21 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
           Everyone edits the same song in the browser. No install and no same Wi‑Fi required.
         </p>
         <p style="color:#888;font-size:13px;margin-top:8px">
-          Jam tools: status (edit/listen/AFK), spectator follow, host freeze, track claims,
-          reactions, QR invite, jam tape log, and song-hash sync badge.
+          Simple path: name → Join a public room or Create room → Copy invite link.
+          Extra tools live under More options / Jam tools.
         </p>
       </section>
 
       <details class="sb-updates" id="sb-updates" open>
         <summary>Update board</summary>
         <div class="sb-updates-body">
+          <div class="sb-update-item">
+            <div class="when">2026-07-11 · mp51</div>
+            <div class="what">
+              <strong>Simpler multipplayer.</strong>
+              Public rooms list first, big Create / Join buttons, advanced tools tucked under More / Jam tools.
+            </div>
+          </div>
           <div class="sb-update-item">
             <div class="when">2026-07-11 · mp50</div>
             <div class="what">
@@ -2057,7 +2235,7 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
 
   // Native script load — Safari handles this much better than fetch+eval
   var s = document.createElement("script");
-  s.src = "chipbox-app.js?v=mp50";
+  s.src = "chipbox-app.js?v=mp51";
   s.async = false;
   s.onload = function () {
     setMsg("Engine loaded — starting…");

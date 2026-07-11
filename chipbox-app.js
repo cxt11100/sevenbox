@@ -2434,7 +2434,7 @@ try {
     if (!lobbyList) return;
     lobbyList.innerHTML = "";
     if (!lobbyServers.length) {
-      lobbyList.innerHTML = '<div class="sb-srv-empty">No public rooms — host one to appear here.</div>';
+      lobbyList.innerHTML = '<div class="sb-srv-empty">No public rooms yet — create one below.</div>';
       return;
     }
     var myRoom = room ? String(room).toUpperCase() : "";
@@ -2444,11 +2444,6 @@ try {
         // Only the room you're currently in — never show Join for it
         var isMine = !!(myRoom && code && code === myRoom);
         var n = srv.count || 1;
-        var bpm = (srv.bpm != null && !isNaN(+srv.bpm)) ? (+srv.bpm | 0) : null;
-        if (bpm != null) {
-          if (bpm < 30) bpm = 30;
-          if (bpm > 500) bpm = 500;
-        }
 
         var row = document.createElement("div");
         row.className = "sb-srv" + (isMine ? " is-mine" : "");
@@ -2456,15 +2451,17 @@ try {
         var hostBit = escapeHtml(srv.host || "?");
         if (srv.hostIsOwner) hostBit = '<span class="sb-owner-tag">' + hostBit + "</span>";
 
-        var metaParts = [hostBit, escapeHtml(code || "?"), n + (n === 1 ? " online" : " online")];
-        if (bpm != null) metaParts.push(bpm + " bpm");
-        if (srv.playing) metaParts.push("playing");
+        // Simple meta: host · people (code only if needed for private-feel)
+        var metaParts = [hostBit, n + " online"];
+        if (srv.playing) metaParts.push("▶");
 
         var main = document.createElement("div");
         main.className = "sb-srv-main";
         main.innerHTML =
           '<div class="sb-srv-title">' + escapeHtml(srv.title || "jam") + "</div>" +
-          '<div class="sb-srv-meta">' + metaParts.join(" · ") + "</div>";
+          '<div class="sb-srv-meta">' + metaParts.join(" · ") +
+            (code ? ' · <span style="opacity:0.7">' + escapeHtml(code) + "</span>" : "") +
+          "</div>";
 
         row.appendChild(main);
 
@@ -2472,7 +2469,7 @@ try {
           var here = document.createElement("div");
           here.className = "sb-srv-here";
           here.textContent = "You're here";
-          here.title = "This is your current server — leave first to join another";
+          here.title = "You're in this room — leave first to join another";
           row.appendChild(here);
         } else {
           var btn = document.createElement("button");
@@ -2841,6 +2838,23 @@ try {
     if (visEl) visEl.disabled = on;
     if (roleSel) roleSel.disabled = on && !isHost;
     if (roleApply) roleApply.disabled = !on || !isHost;
+    // Simple connect flow: hide create/code while in room; show share/leave/chat
+    var connectEl = document.getElementById("sb-mp-connect");
+    var inroomEl = document.getElementById("sb-mp-inroom");
+    if (connectEl) {
+      if (on) connectEl.classList.add("sb-hidden");
+      else connectEl.classList.remove("sb-hidden");
+    }
+    if (inroomEl) {
+      if (on) inroomEl.classList.remove("sb-hidden");
+      else inroomEl.classList.add("sb-hidden");
+    }
+    var inLab = document.getElementById("sb-mp-inroom-label");
+    if (inLab && on) {
+      inLab.textContent =
+        "In room: " + (roomTitle || room || "…") +
+        (room ? " · " + room : "");
+    }
   }
 
   function hardCloseWs() {
@@ -2934,9 +2948,13 @@ try {
       appendJamLine(msg.type === "created" ? "You hosted " + room : "You joined " + room);
       if (bannerEl) {
         bannerEl.textContent = isHost
-          ? (msg.public ? "Public — on the server list. " : "Private — invite only. ") +
-            "Code " + room + ". Tap Share invite for a friend link. Joiners: " + (msg.defaultRole || "edit") + "."
-          : "In \"" + (roomTitle || room) + "\" as " + myRole + ". Host: " + (msg.host || "?") + ".";
+          ? (msg.public ? "Your room is public. " : "Private room. ") +
+            "Code " + room + " — copy invite link to share with friends."
+          : "Joined \"" + (roomTitle || room) + "\". Host: " + (msg.host || "?") + ".";
+      }
+      var inLab2 = document.getElementById("sb-mp-inroom-label");
+      if (inLab2) {
+        inLab2.textContent = "In room: " + (roomTitle || room) + " · " + room;
       }
       // permanent-host deep link in the address bar
       try {
@@ -3296,15 +3314,15 @@ try {
     var code = room || (codeEl && codeEl.value) || roomFromUrl();
     code = String(code || "").trim().toUpperCase().replace(/\s+/g, "");
     if (!code) {
-      setStatus("Host or join a room first, then Share invite", "err");
+      setStatus("Join or create a room first, then copy the invite", "err");
       return;
     }
     var link = inviteUrl(code);
     var text = "SevenBox jam\n" + link + "\nCode: " + code;
     function ok() {
-      setStatus("Invite copied — send to friends", "on");
+      setStatus("Invite link copied — send it to friends", "on");
       if (bannerEl) {
-        bannerEl.textContent = "Invite: " + link;
+        bannerEl.textContent = "Invite ready: " + link;
       }
     }
     function fail() {
@@ -3484,19 +3502,25 @@ try {
     });
   }
 
-  if (roleApply) {
-    roleApply.addEventListener("click", function () {
-      if (!isHost || !ws || ws.readyState !== 1 || !room) {
-        setStatus("Only the host can change permissions", "err");
-        return;
-      }
+  function applyPermsToRoom() {
+    if (!isHost || !ws || ws.readyState !== 1 || !room) {
+      setStatus("Only the host can change permissions", "err");
+      return;
+    }
+    try {
       ws.send(JSON.stringify({
         type: "set_default_role",
         defaultRole: (roleSel && roleSel.value) || "edit",
         applyToAll: true
       }));
-    });
+      setStatus("Permissions applied to room", "on");
+    } catch (e) {
+      setStatus("Couldn't apply permissions", "err");
+    }
   }
+  if (roleApply) roleApply.addEventListener("click", applyPermsToRoom);
+  var roleApplyIn = document.getElementById("sb-mp-apply-role-inroom");
+  if (roleApplyIn) roleApplyIn.addEventListener("click", applyPermsToRoom);
   if (roleSel) {
     roleSel.addEventListener("change", function () {
       if (!isHost || !room || !ws || ws.readyState !== 1) return;
