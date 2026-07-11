@@ -2063,43 +2063,70 @@ try {
       lobbyList.innerHTML = '<div class="sb-srv-empty">No public rooms — host one to appear here.</div>';
       return;
     }
+    var myRoom = room ? String(room).toUpperCase() : "";
+    var myName = getName();
     for (var i = 0; i < lobbyServers.length; i++) {
       (function (srv) {
-        var row = document.createElement("div");
-        row.className = "sb-srv" + (srv.playing ? " is-playing" : "");
-        var hostBit = escapeHtml(srv.host || "?");
-        if (srv.hostIsOwner) hostBit = '<span class="sb-owner-tag">' + hostBit + " · owner</span>";
+        var code = String(srv.code || "").toUpperCase();
+        var isMine = !!(myRoom && code && code === myRoom);
+        // also treat as yours if you're the host name and still connected to that room
+        if (!isMine && myRoom && srv.host && namesMatch(srv.host, myName) && isHost) {
+          isMine = code === myRoom;
+        }
         var bpm = (srv.bpm != null && !isNaN(+srv.bpm)) ? (+srv.bpm | 0) : 150;
         if (bpm < 30) bpm = 30;
         if (bpm > 500) bpm = 500;
+        var n = srv.count || 1;
+
+        var row = document.createElement("div");
+        row.className = "sb-srv" + (isMine ? " is-mine" : "");
+
+        var hostBit = escapeHtml(srv.host || "?");
+        if (srv.hostIsOwner) hostBit = '<span class="sb-owner-tag">' + hostBit + "</span>";
+
         var main = document.createElement("div");
         main.className = "sb-srv-main";
         main.innerHTML =
-          '<div class="sb-srv-title">' + escapeHtml(srv.title || "jam") + "</div>" +
-          '<div class="sb-srv-meta">' + hostBit +
-          " · " + escapeHtml(srv.code || "?") +
-          (srv.defaultRole === "view" ? " · view" : "") +
-          "</div>";
-        var status = document.createElement("div");
-        status.className = "sb-srv-status";
-        status.innerHTML =
-          '<span class="sb-srv-play ' + (srv.playing ? "on" : "off") + '" title="' +
-            (srv.playing ? "Room is playing" : "Room is stopped") + '">' +
-            (srv.playing ? "▶ Playing" : "■ Stopped") +
+          '<div class="sb-srv-title">' + escapeHtml(srv.title || "jam") +
+            (isMine ? ' <span style="color:#6dffa8;font-weight:700;font-size:11px">· you</span>' : "") +
+          "</div>" +
+          '<div class="sb-srv-meta">' + hostBit + " · " + escapeHtml(code || "?") + "</div>";
+
+        var bits = document.createElement("div");
+        bits.className = "sb-srv-bits";
+        bits.innerHTML =
+          '<span class="' + (srv.playing ? "dot-play" : "dot-stop") + '" title="' +
+            (srv.playing ? "Playing" : "Stopped") + '">' +
+            (srv.playing ? "▶" : "■") +
           "</span>" +
-          '<span class="sb-srv-bpm" title="Song tempo">' + bpm + " BPM</span>" +
-          '<span class="sb-srv-count">' + (srv.count || 1) + " online</span>";
-        var btn = document.createElement("button");
-        btn.type = "button";
-        btn.textContent = "Join";
-        btn.addEventListener("click", function () {
-          if (!requireName()) return;
-          if (codeEl) codeEl.value = srv.code;
-          joinWithCode(srv.code);
-        });
+          "<span>" + bpm + "</span>" +
+          "<span>·</span>" +
+          "<span>" + n + "</span>";
+
         row.appendChild(main);
-        row.appendChild(status);
-        row.appendChild(btn);
+        row.appendChild(bits);
+
+        if (isMine) {
+          var here = document.createElement("div");
+          here.className = "sb-srv-here";
+          here.textContent = "In room";
+          here.title = "You're already in this server — leave first to join another";
+          row.appendChild(here);
+        } else {
+          var btn = document.createElement("button");
+          btn.type = "button";
+          btn.textContent = "Join";
+          btn.addEventListener("click", function () {
+            if (room && String(room).toUpperCase() === code) {
+              setStatus("You're already in this room", "on");
+              return;
+            }
+            if (!requireName()) return;
+            if (codeEl) codeEl.value = code;
+            joinWithCode(code);
+          });
+          row.appendChild(btn);
+        }
         lobbyList.appendChild(row);
       })(lobbyServers[i]);
     }
@@ -2885,11 +2912,22 @@ try {
       setStatus("Room code looks too short", "err");
       return;
     }
+    // Re-joining your current room used to leave+rejoin and break host/create state
+    if (room && String(room).toUpperCase() === code) {
+      setStatus("You're already in this room — leave first to switch", "on");
+      if (codeEl) codeEl.value = code;
+      return;
+    }
     if (!requireName()) return;
     if (codeEl) codeEl.value = code;
     connectForAction(function () {
       if (!ws || ws.readyState !== 1) {
         setStatus("Still connecting — try Join again in a second", "err");
+        return;
+      }
+      // re-check after connect (room may already be set)
+      if (room && String(room).toUpperCase() === code) {
+        setStatus("You're already in this room", "on");
         return;
       }
       var nm = getName();
@@ -2921,6 +2959,10 @@ try {
 
   btnCreate.addEventListener("click", function () {
     if (!requireName()) return;
+    if (room) {
+      setStatus("Leave your current room before hosting a new one", "err");
+      return;
+    }
     var title = (titleEl && titleEl.value || "").trim();
     if (!title) {
       title = randomRoomTitle();

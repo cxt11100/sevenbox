@@ -571,8 +571,8 @@ body {
 #sb-mp-lobby-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  max-height: 200px;
+  gap: 0;
+  max-height: 220px;
   overflow-x: hidden;
   overflow-y: auto;
   max-width: 100%;
@@ -580,65 +580,28 @@ body {
   box-sizing: border-box;
   border: 1px solid #2a2a2a;
   border-radius: 8px;
-  background: #0c0c0c;
-  padding: 4px;
+  background: #0a0a0a;
 }
 .sb-srv {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
+  display: flex;
   align-items: center;
-  gap: 8px 12px;
-  padding: 8px 10px;
-  border-radius: 6px;
-  background: transparent;
-  border: none;
-  border-bottom: 1px solid #1a1a1a;
-  max-width: 100%;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #1c1c1c;
   box-sizing: border-box;
   min-width: 0;
 }
 .sb-srv:last-child { border-bottom: none; }
-.sb-srv:hover { background: #141414; }
-.sb-srv.is-playing {
-  background: rgba(255, 79, 216, 0.04);
+.sb-srv:hover { background: #111; }
+.sb-srv.is-mine {
+  background: rgba(109, 255, 168, 0.05);
 }
-.sb-srv-status {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 3px;
+.sb-srv.is-mine:hover { background: rgba(109, 255, 168, 0.07); }
+.sb-srv-main {
+  flex: 1;
   min-width: 0;
 }
-.sb-srv-play {
-  font: 700 10px/1.2 system-ui, sans-serif;
-  letter-spacing: 0.03em;
-  padding: 3px 7px;
-  border-radius: 999px;
-  white-space: nowrap;
-}
-.sb-srv-play.on {
-  color: #1a1020;
-  background: #ff4fd8;
-  box-shadow: 0 0 10px rgba(255, 79, 216, 0.35);
-}
-.sb-srv-play.off {
-  color: #777;
-  background: #151515;
-  border: 1px solid #2a2a2a;
-}
-.sb-srv-bpm {
-  font: 700 10px/1 ui-monospace, monospace;
-  color: #9ab;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-}
-.sb-srv .sb-srv-main {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.sb-srv .sb-srv-title {
+.sb-srv-title {
   font-weight: 700;
   color: #eee;
   font-size: 13px;
@@ -646,45 +609,63 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.sb-srv .sb-srv-meta {
+.sb-srv-meta {
+  margin-top: 2px;
   font-size: 11px;
   color: #666;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.sb-srv .sb-srv-meta .sb-owner-tag {
-  color: #f0d78c;
-  font-weight: 800;
-}
-.sb-srv .sb-srv-count {
-  font: 700 12px/1 ui-monospace, monospace;
-  color: #aaa;
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: #151515;
-  border: 1px solid #2a2a2a;
+.sb-srv-meta .sb-owner-tag { color: #f0d78c; font-weight: 700; }
+.sb-srv-bits {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  font: 600 11px/1 system-ui, sans-serif;
+  color: #888;
   white-space: nowrap;
 }
-.sb-srv button {
-  background: #1a1a1a !important;
-  border: 1px solid #444 !important;
-  color: #eee !important;
-  font-weight: 700;
-  padding: 5px 12px !important;
-  border-radius: 6px !important;
-  font-size: 11px !important;
+.sb-srv-bits .dot-play {
+  color: #ff4fd8;
+  font-weight: 800;
+}
+.sb-srv-bits .dot-stop {
+  color: #555;
+}
+.sb-srv button,
+.sb-srv .sb-srv-here {
+  flex-shrink: 0;
+  min-width: 72px;
+  text-align: center;
+  font: 700 11px/1 system-ui, sans-serif;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  padding: 7px 12px;
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+.sb-srv button {
+  background: #161616 !important;
+  border: 1px solid #3a3a3a !important;
+  color: #eee !important;
+  cursor: pointer;
 }
 .sb-srv button:hover {
-  border-color: #888 !important;
-  background: #222 !important;
+  border-color: #777 !important;
+  background: #1c1c1c !important;
+}
+.sb-srv .sb-srv-here {
+  background: transparent;
+  border: 1px solid rgba(109, 255, 168, 0.35);
+  color: #6dffa8;
+  cursor: default;
 }
 .sb-srv-empty {
   font-size: 12px;
   color: #555;
-  padding: 14px 10px;
+  padding: 16px 12px;
   text-align: center;
 }
 
@@ -1861,7 +1842,7 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
 
   // Native script load — Safari handles this much better than fetch+eval
   var s = document.createElement("script");
-  s.src = "chipbox-app.js?v=mp45";
+  s.src = "chipbox-app.js?v=mp46";
   s.async = false;
   s.onload = function () {
     setMsg("Engine loaded — starting…");
