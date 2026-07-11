@@ -111,6 +111,12 @@ try {
   var roleSel = document.getElementById("sb-mp-default-role");
   var roleApply = document.getElementById("sb-mp-apply-role");
   var lobbyList = document.getElementById("sb-mp-lobby-list");
+  var chatRoot = document.getElementById("sb-mp-chat");
+  var chatLog = document.getElementById("sb-mp-chat-log");
+  var chatForm = document.getElementById("sb-mp-chat-form");
+  var chatInput = document.getElementById("sb-mp-chat-input");
+  var chatSend = document.getElementById("sb-mp-chat-send");
+  var chatClear = document.getElementById("sb-mp-chat-clear");
   var gate = document.getElementById("sb-name-gate");
   var gateInput = document.getElementById("sb-gate-input");
   var gateGo = document.getElementById("sb-gate-go");
@@ -1951,7 +1957,7 @@ try {
     for (var i = 0; i < list.length; i++) {
       var p = list[i];
       if (!p) continue;
-      parts.push((p.name || "") + ":" + (p.role || "") + ":" + (p.isHost ? "1" : "0") + ":" + (p.channel != null ? p.channel : ""));
+      parts.push((p.name || "") + ":" + (p.role || "") + ":" + (p.isHost ? "1" : "0") + ":" + (p.isOwner ? "1" : "0") + ":" + (p.channel != null ? p.channel : ""));
     }
     return parts.join("|");
   }
@@ -1959,6 +1965,91 @@ try {
 
   function escapeHtml(s) {
     return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+
+  function isLocalOwner() {
+    return nameLooksLikeSeven(getName()) && sessionSevenKey === SEVEN_KEY;
+  }
+
+  function setChatOpen(on) {
+    if (!chatRoot) return;
+    if (on) {
+      chatRoot.classList.add("sb-show");
+      if (chatInput) chatInput.disabled = false;
+      if (chatSend) chatSend.disabled = false;
+      if (isLocalOwner()) chatRoot.classList.add("sb-owner");
+      else chatRoot.classList.remove("sb-owner");
+    } else {
+      chatRoot.classList.remove("sb-show");
+      if (chatInput) { chatInput.disabled = true; chatInput.value = ""; }
+      if (chatSend) chatSend.disabled = true;
+      chatRoot.classList.remove("sb-owner");
+    }
+  }
+
+  function clearChatLog() {
+    if (chatLog) chatLog.innerHTML = "";
+  }
+
+  function appendChatLine(msg) {
+    if (!chatLog || !msg) return;
+    var line = document.createElement("div");
+    if (msg.type === "chat_clear" || msg.sys) {
+      line.className = "sb-chat-line sys";
+      line.textContent = msg.text || ("Chat cleared by " + (msg.by || "owner"));
+    } else {
+      var owner = !!msg.isOwner;
+      line.className = "sb-chat-line" + (owner ? " owner" : "");
+      line.innerHTML =
+        '<span class="who">' + escapeHtml(msg.name || "?") + "</span>" +
+        "<span class=\"txt\">" + escapeHtml(msg.text || "") + "</span>";
+    }
+    chatLog.appendChild(line);
+    // cap DOM
+    while (chatLog.children.length > 60) chatLog.removeChild(chatLog.firstChild);
+    chatLog.scrollTop = chatLog.scrollHeight;
+  }
+
+  function loadChatHistory(list) {
+    clearChatLog();
+    list = list || [];
+    for (var i = 0; i < list.length; i++) appendChatLine(list[i]);
+  }
+
+  function sendChat(text) {
+    text = String(text || "").trim();
+    if (!text || !room) return;
+    if (!ws || ws.readyState !== 1) {
+      setStatus("Not connected — chat offline", "err");
+      return;
+    }
+    try {
+      ws.send(JSON.stringify({
+        type: "chat",
+        text: text,
+        name: getName(),
+        nameKey: nameKeyForSend(getName()),
+        room: room
+      }));
+    } catch (e) {
+      setStatus("Couldn't send chat", "err");
+    }
+  }
+
+  if (chatForm) {
+    chatForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      if (!chatInput) return;
+      var t = chatInput.value;
+      chatInput.value = "";
+      sendChat(t);
+    });
+  }
+  if (chatClear) {
+    chatClear.addEventListener("click", function () {
+      if (!isLocalOwner()) return;
+      sendChat("/clear");
+    });
   }
 
   function renderPeers(list, opts) {
@@ -1976,21 +2067,28 @@ try {
         if (!p) continue;
         var chip = document.createElement("span");
         var role = p.role || "edit";
+        var isOwner = !!p.isOwner;
         // 0-based like BeepBox track numbers (0,1,2,3…) — coerce string channels too
         var chNum = (p.channel != null && p.channel !== "" && !isNaN(+p.channel)) ? (+p.channel | 0) : 0;
         if (chNum < 0) chNum = 0;
         var same = p.name !== getName() && chNum === (myCh | 0);
-        chip.className = "sb-peer-chip" + (role === "view" ? " view" : "") + (p.isHost ? " host" : "");
+        chip.className = "sb-peer-chip" +
+          (role === "view" ? " view" : "") +
+          (p.isHost ? " host" : "") +
+          (isOwner ? " owner" : "");
         if (same) chip.classList.add("ghost-same");
-        var color = peerColorFor(p.name, i);
+        var color = isOwner ? "#f0d78c" : peerColorFor(p.name, i);
+        var roleLabel = isOwner ? "OWNER" : (p.isHost ? "host" : role);
         chip.innerHTML =
           '<span class="dot" style="background:' + color + '"></span>' +
           '<span class="nm">' + escapeHtml(p.name || "?") + "</span>" +
           '<span class="ch-badge">' + chNum + "</span>" +
-          '<span class="role">' + escapeHtml(p.isHost ? "host" : role) + "</span>";
-        chip.title = same
-          ? (p.name || "?") + " is on the same track as you (" + chNum + ") — ghostly track bar"
-          : (p.name || "?") + " is on track " + chNum;
+          '<span class="role">' + escapeHtml(roleLabel) + "</span>";
+        chip.title = isOwner
+          ? (p.name || "seven") + " — site owner (unique role)"
+          : (same
+            ? (p.name || "?") + " is on the same track as you (" + chNum + ")"
+            : (p.name || "?") + " is on track " + chNum);
         peersEl.appendChild(chip);
       }
     } else {
@@ -2004,18 +2102,26 @@ try {
     if (!lobbyList) return;
     lobbyList.innerHTML = "";
     if (!lobbyServers.length) {
-      lobbyList.innerHTML = '<div class="sb-srv-empty">No public rooms right now — host one (blank title gets a random name).</div>';
+      lobbyList.innerHTML = '<div class="sb-srv-empty">No public rooms — host one to appear here.</div>';
       return;
     }
     for (var i = 0; i < lobbyServers.length; i++) {
       (function (srv) {
         var row = document.createElement("div");
         row.className = "sb-srv";
-        row.innerHTML =
-          '<div class="sb-srv-title">' + escapeHtml(srv.title || "jam") + '</div>' +
-          '<div class="sb-srv-meta">host ' + escapeHtml(srv.host || "?") +
-          " · " + (srv.count || 1) + " online · code " + escapeHtml(srv.code || "?") + " · " +
-          (srv.defaultRole === "view" ? "view-only" : "edit") + "</div>";
+        var hostBit = escapeHtml(srv.host || "?");
+        if (srv.hostIsOwner) hostBit = '<span class="sb-owner-tag">' + hostBit + " · owner</span>";
+        var main = document.createElement("div");
+        main.className = "sb-srv-main";
+        main.innerHTML =
+          '<div class="sb-srv-title">' + escapeHtml(srv.title || "jam") + "</div>" +
+          '<div class="sb-srv-meta">' + hostBit +
+          " · " + escapeHtml(srv.code || "?") +
+          (srv.defaultRole === "view" ? " · view" : "") +
+          "</div>";
+        var count = document.createElement("span");
+        count.className = "sb-srv-count";
+        count.textContent = (srv.count || 1) + " online";
         var btn = document.createElement("button");
         btn.type = "button";
         btn.textContent = "Join";
@@ -2024,6 +2130,8 @@ try {
           if (codeEl) codeEl.value = srv.code;
           joinWithCode(srv.code);
         });
+        row.appendChild(main);
+        row.appendChild(count);
         row.appendChild(btn);
         lobbyList.appendChild(row);
       })(lobbyServers[i]);
@@ -2479,6 +2587,8 @@ try {
       lastTransportSent = "";
       lastSongSig = msg.sig != null ? msg.sig : null;
       renderPeers(msg.peers || [], { forceChips: true });
+      loadChatHistory(msg.chat || []);
+      setChatOpen(true);
       startLoops();
       setSyncPill(true, false, "Live sync — keep this tab open");
       resumeAllAudio();
@@ -2591,6 +2701,11 @@ try {
         if (rejoinTimer) { clearTimeout(rejoinTimer); rejoinTimer = null; }
         setSyncPill(false);
       }
+    } else if (msg.type === "chat") {
+      appendChatLine(msg);
+    } else if (msg.type === "chat_clear") {
+      clearChatLog();
+      appendChatLine({ sys: true, text: "Chat cleared by " + (msg.by || "owner") });
     } else if (msg.type === "left") {
       room = null;
       wantRoom = null;
@@ -2601,6 +2716,8 @@ try {
       setConnectedUi(false);
       setReadonlyUi(false);
       renderPeers([]);
+      clearChatLog();
+      setChatOpen(false);
       setStatus("Left server — solo", "");
     }
   }
@@ -2883,6 +3000,8 @@ try {
     setConnectedUi(false);
     setReadonlyUi(false);
     renderPeers([]);
+    clearChatLog();
+    setChatOpen(false);
     setStatus("Left room — still online", "");
     setSyncPill(false);
     try {

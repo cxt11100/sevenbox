@@ -191,6 +191,8 @@ class Room:
         self._presence_dirty = False
         self._presence_flush_task: asyncio.Task | None = None
         self._hb_tick = 0
+        self._chat_last: dict[ServerConnection, float] = {}
+        self.chat_log: list[dict[str, Any]] = []  # last messages for late joiners
 
     def peer_list(self) -> list[dict[str, Any]]:
         out = []
@@ -213,9 +215,10 @@ class Room:
                 bar = int(p.get("bar", 0) or 0)
             except (TypeError, ValueError):
                 bar = 0
+            nm = self.names.get(c, "player")
             out.append(
                 {
-                    "name": self.names.get(c, "player"),
+                    "name": nm,
                     "role": self.roles.get(c, "edit"),
                     "channel": ch,
                     "bar": bar,
@@ -223,16 +226,20 @@ class Room:
                     "y": y,
                     "inside": inside,
                     "isHost": c is self.host,
+                    # Only real "seven" (key-checked at join) can ever be true
+                    "isOwner": is_seven_name(nm),
                 }
             )
         return out
 
     def lobby_entry(self) -> dict[str, Any]:
+        host_name = self.names.get(self.host, "host")
         return {
             "code": self.code,
             "title": self.title,
             "public": self.public,
-            "host": self.names.get(self.host, "host"),
+            "host": host_name,
+            "hostIsOwner": is_seven_name(host_name),
             "count": len(self.clients),
             "defaultRole": self.default_role,
             "created": int(self.created),
@@ -565,6 +572,8 @@ async def ws_handler(ws: ServerConnection) -> None:
                         "song": room.song,
                         "transport": room.last_transport,
                         "ts": room.song_ts,
+                        "chat": room.chat_log[-30:],
+                        "isOwner": is_seven_name(name),
                     },
                 )
                 await broadcast_lobby()
@@ -634,6 +643,8 @@ async def ws_handler(ws: ServerConnection) -> None:
                         "you": name,
                         "transport": room.last_transport,
                         "ts": room.song_ts,
+                        "chat": room.chat_log[-30:],
+                        "isOwner": is_seven_name(name),
                     },
                 )
                 await broadcast_room(
@@ -800,6 +811,49 @@ async def ws_handler(ws: ServerConnection) -> None:
                     if ws in room.names:
                         room.names[ws] = str(msg.get("name"))[:24]
                 schedule_presence_broadcast(room)
+
+            elif mtype == "chat":
+                code = client_room.get(ws)
+                room = rooms.get(code) if code else None
+                if not room or ws not in room.clients:
+                    await send(ws, {"type": "error", "message": "join a room to chat"})
+                    continue
+                name = room.names.get(ws, "player")
+                text = " ".join(str(msg.get("text") or "").strip().split())
+                if not text:
+                    continue
+                if len(text) > 180:
+                    text = text[:180]
+                # owner-only: clear room chat
+                if text.lower() in ("/clear", "/clearchat") and is_seven_name(name):
+                    room.chat_log = []
+                    await broadcast_room(
+                        room,
+                        {
+                            "type": "chat_clear",
+                            "by": name,
+                            "ts": int(time.time() * 1000),
+                        },
+                    )
+                    continue
+                # rate limit ~3 msgs / 2s
+                now_t = time.time()
+                last_t = room._chat_last.get(ws, 0.0)
+                if now_t - last_t < 0.35:
+                    continue
+                room._chat_last[ws] = now_t
+                entry = {
+                    "type": "chat",
+                    "name": name,
+                    "text": text,
+                    "isOwner": is_seven_name(name),
+                    "isHost": ws is room.host,
+                    "ts": int(now_t * 1000),
+                }
+                room.chat_log.append(entry)
+                if len(room.chat_log) > 40:
+                    room.chat_log = room.chat_log[-40:]
+                await broadcast_room(room, entry)
 
             elif mtype == "request_sync":
                 code = client_room.get(ws)

@@ -612,74 +612,205 @@ body {
   color: #ffe6a0;
 }
 
-/* Server browser / lobby */
+/* Server browser / lobby — clean simple list */
 #sb-mp-lobby {
   width: 100%;
   max-width: 100%;
-  margin-top: 8px;
-  border-top: 1px solid #333;
-  padding-top: 8px;
+  margin-top: 10px;
+  border-top: 1px solid #2a2a2a;
+  padding-top: 10px;
   box-sizing: border-box;
   overflow-x: hidden;
   min-width: 0;
 }
 #sb-mp-lobby h3 {
-  margin: 0 0 6px;
+  margin: 0 0 8px;
   font-size: 11px;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #ccc;
+  color: #888;
   font-weight: 700;
 }
 #sb-mp-lobby-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  max-height: 180px;
+  gap: 4px;
+  max-height: 200px;
   overflow-x: hidden;
   overflow-y: auto;
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  background: #0c0c0c;
+  padding: 4px;
 }
 .sb-srv {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
   align-items: center;
-  gap: 8px;
+  gap: 8px 12px;
   padding: 8px 10px;
-  border-radius: 8px;
-  background: #121212;
-  border: 1px solid #333;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #1a1a1a;
   max-width: 100%;
   box-sizing: border-box;
   min-width: 0;
 }
-.sb-srv .sb-srv-title,
-.sb-srv .sb-srv-meta {
+.sb-srv:last-child { border-bottom: none; }
+.sb-srv:hover { background: #141414; }
+.sb-srv .sb-srv-main {
   min-width: 0;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 .sb-srv .sb-srv-title {
-  flex: 1 1 120px;
   font-weight: 700;
-  color: #e8fff2;
+  color: #eee;
   font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .sb-srv .sb-srv-meta {
   font-size: 11px;
-  color: #8ab89a;
+  color: #666;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sb-srv .sb-srv-meta .sb-owner-tag {
+  color: #f0d78c;
+  font-weight: 800;
+}
+.sb-srv .sb-srv-count {
+  font: 700 12px/1 ui-monospace, monospace;
+  color: #aaa;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #151515;
+  border: 1px solid #2a2a2a;
+  white-space: nowrap;
 }
 .sb-srv button {
-  background: #1a8f55 !important;
-  border-color: #6dffa8 !important;
+  background: #1a1a1a !important;
+  border: 1px solid #444 !important;
+  color: #eee !important;
   font-weight: 700;
+  padding: 5px 12px !important;
+  border-radius: 6px !important;
+  font-size: 11px !important;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.sb-srv button:hover {
+  border-color: #888 !important;
+  background: #222 !important;
 }
 .sb-srv-empty {
   font-size: 12px;
-  color: #6a8a72;
-  padding: 6px 2px;
+  color: #555;
+  padding: 14px 10px;
+  text-align: center;
+}
+
+/* Room chat */
+#sb-mp-chat {
+  width: 100%;
+  max-width: 100%;
+  margin-top: 8px;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  background: #0c0c0c;
+  box-sizing: border-box;
+  display: none;
+  flex-direction: column;
+  min-width: 0;
+}
+#sb-mp-chat.sb-show { display: flex; }
+#sb-mp-chat .sb-chat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid #222;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #888;
+}
+#sb-mp-chat .sb-chat-head .sb-chat-clear {
+  display: none;
+  font-size: 10px;
+  padding: 3px 8px;
+  letter-spacing: 0.04em;
+}
+#sb-mp-chat.sb-owner .sb-chat-clear { display: inline-block; }
+#sb-mp-chat-log {
+  height: 120px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #ccc;
+}
+#sb-mp-chat-log .sb-chat-line {
+  margin: 0 0 5px;
+  word-break: break-word;
+}
+#sb-mp-chat-log .sb-chat-line .who {
+  font-weight: 800;
+  color: #9ab;
+  margin-right: 4px;
+}
+#sb-mp-chat-log .sb-chat-line.owner .who {
+  color: #f0d78c;
+  text-shadow: 0 0 8px rgba(212,175,55,0.35);
+}
+#sb-mp-chat-log .sb-chat-line.owner .who::after {
+  content: " OWNER";
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  margin-left: 3px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(212,175,55,0.18);
+  border: 1px solid rgba(212,175,55,0.4);
+  color: #f0d78c;
+  vertical-align: middle;
+}
+#sb-mp-chat-log .sb-chat-line.sys {
+  color: #666;
+  font-style: italic;
+  font-size: 11px;
+}
+#sb-mp-chat-form {
+  display: flex;
+  gap: 6px;
+  padding: 6px 8px 8px;
+  border-top: 1px solid #222;
+}
+#sb-mp-chat-form input {
+  flex: 1;
+  min-width: 0;
+  width: auto !important;
+  background: #111;
+  border: 1px solid #333;
+  border-radius: 6px;
+  color: #eee;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-family: inherit;
+}
+#sb-mp-chat-form button {
+  flex-shrink: 0;
 }
 .sb-mp-host-opts {
   width: 100%;
@@ -743,6 +874,18 @@ body {
 }
 .sb-peer-chip.view { border-color: rgba(122,231,255,0.4); color: #b8eaff; background: rgba(122,231,255,0.1); }
 .sb-peer-chip.host { border-color: rgba(255,215,109,0.5); color: #ffe6a0; }
+.sb-peer-chip.owner {
+  border-color: rgba(212,175,55,0.75);
+  color: #f0d78c;
+  background: linear-gradient(135deg, rgba(42,24,72,0.9), rgba(30,20,10,0.95));
+  box-shadow: 0 0 12px rgba(212,175,55,0.2);
+}
+.sb-peer-chip.owner .role {
+  background: rgba(212,175,55,0.25);
+  color: #f0d78c;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
 .sb-peer-chip .dot {
   width: 8px; height: 8px; border-radius: 50%;
   background: var(--pc, #6dffa8); opacity: 0.95;
@@ -1582,9 +1725,20 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
         <span class="sb-mp-status" id="sb-mp-status"><span class="sb-mp-dot"></span>Online host — host a room or join by list/code</span>
         <div class="sb-mp-banner" id="sb-mp-banner">Same link for everyone. Host or join by list/code. Song + play/stop sync. Blank title = random name. Free host may take ~30–60s to wake.</div>
         <div id="sb-mp-peers"></div>
+        <div id="sb-mp-chat" aria-label="Room chat">
+          <div class="sb-chat-head">
+            <span>Room chat</span>
+            <button type="button" class="sb-chat-clear" id="sb-mp-chat-clear" title="Owner only: clear chat">Clear</button>
+          </div>
+          <div id="sb-mp-chat-log"></div>
+          <form id="sb-mp-chat-form" autocomplete="off">
+            <input id="sb-mp-chat-input" type="text" maxlength="180" placeholder="Message the room…" disabled />
+            <button type="submit" id="sb-mp-chat-send" disabled>Send</button>
+          </form>
+        </div>
         <div id="sb-mp-lobby">
-          <h3>Public servers</h3>
-          <div id="sb-mp-lobby-list"><div class="sb-srv-empty">Connecting to lobby…</div></div>
+          <h3>Public rooms</h3>
+          <div id="sb-mp-lobby-list"><div class="sb-srv-empty">Connecting…</div></div>
         </div>
       </div>
 
@@ -1736,7 +1890,7 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
 
   // Native script load — Safari handles this much better than fetch+eval
   var s = document.createElement("script");
-  s.src = "chipbox-app.js?v=mp32";
+  s.src = "chipbox-app.js?v=mp33";
   s.async = false;
   s.onload = function () {
     setMsg("Engine loaded — starting…");
