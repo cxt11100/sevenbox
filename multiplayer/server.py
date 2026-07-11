@@ -193,6 +193,7 @@ class Room:
         self._hb_tick = 0
         self._chat_last: dict[ServerConnection, float] = {}
         self.chat_log: list[dict[str, Any]] = []  # last messages for late joiners
+        self.typing: dict[ServerConnection, float] = {}  # ws -> last typing time
 
     def peer_list(self) -> list[dict[str, Any]]:
         out = []
@@ -383,6 +384,31 @@ def schedule_presence_broadcast(room: Room) -> None:
         room._presence_flush_task = asyncio.create_task(flush_presence(room))
 
 
+async def broadcast_typing(room: Room) -> None:
+    """Who is currently typing in this room (Discord-style)."""
+    now_t = time.time()
+    # drop stale typing (>3.5s silent)
+    stale = [c for c, t in room.typing.items() if now_t - t > 3.5]
+    for c in stale:
+        room.typing.pop(c, None)
+    names = []
+    for c, t in room.typing.items():
+        if c not in room.clients:
+            continue
+        nm = room.names.get(c)
+        if nm:
+            names.append(nm)
+    names.sort()
+    await broadcast_room(
+        room,
+        {
+            "type": "typing",
+            "names": names,
+            "ts": int(now_t * 1000),
+        },
+    )
+
+
 async def broadcast_lobby() -> None:
     payload = {"type": "lobby", "servers": public_lobby()}
     raw = json.dumps(payload, separators=(",", ":"))
@@ -423,6 +449,8 @@ async def leave(ws: ServerConnection) -> None:
     room.names.pop(ws, None)
     room.roles.pop(ws, None)
     room.presence.pop(ws, None)
+    room.typing.pop(ws, None)
+    room._chat_last.pop(ws, None)
 
     if not room.clients:
         rooms.pop(code, None)
@@ -447,6 +475,10 @@ async def leave(ws: ServerConnection) -> None:
             "public": room.public,
         },
     )
+    try:
+        await broadcast_typing(room)
+    except Exception:
+        pass
     # New host must unlock host controls immediately (not stay stuck as edit)
     if promoted is not None:
         await send(
@@ -842,6 +874,7 @@ async def ws_handler(ws: ServerConnection) -> None:
                 if now_t - last_t < 0.35:
                     continue
                 room._chat_last[ws] = now_t
+                room.typing.pop(ws, None)  # sent a message → not typing
                 entry = {
                     "type": "chat",
                     "name": name,
@@ -854,6 +887,21 @@ async def ws_handler(ws: ServerConnection) -> None:
                 if len(room.chat_log) > 40:
                     room.chat_log = room.chat_log[-40:]
                 await broadcast_room(room, entry)
+                # also refresh typing list without this sender
+                await broadcast_typing(room)
+
+            elif mtype == "typing":
+                code = client_room.get(ws)
+                room = rooms.get(code) if code else None
+                if not room or ws not in room.clients:
+                    continue
+                active = bool(msg.get("active", True))
+                now_t = time.time()
+                if active:
+                    room.typing[ws] = now_t
+                else:
+                    room.typing.pop(ws, None)
+                await broadcast_typing(room)
 
             elif mtype == "request_sync":
                 code = client_room.get(ws)

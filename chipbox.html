@@ -454,50 +454,71 @@ body {
 /* No multiplayer mouse arrows — presence is BeepBox playhead-style only */
 .sb-remote-cursor { display: none !important; }
 
+/* Fixed overlay so marks aren't clipped by editor overflow (was hiding remotes) */
+#sb-presence-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 99940;
+  overflow: hidden;
+}
+
 /*
- * Remote player mark = same pink as BeepBox's --playhead (width 4px rect).
- * Sits on that player's channel row at the playhead X; name top-left.
- * Same channel as you → ghost (faded), not a second solid pink.
+ * Remote player mark = BeepBox --playhead (4px).
+ * On their channel row at playhead X; name top-left.
+ * Same channel as you → ghost.
  */
 .sb-playhead-mark {
-  position: absolute;
-  width: 4px; /* BeepBox playhead rect width */
+  position: fixed;
+  width: 4px;
   margin-left: -2px;
   pointer-events: none;
-  z-index: 41;
+  z-index: 99941;
   box-sizing: border-box;
   border: none;
   border-radius: 0;
-  /* MUST use BeepBox theme playhead — not a custom pink */
   background: var(--playhead, #ff4fd8);
   opacity: 1;
+  display: none;
 }
+.sb-playhead-mark.sb-on { display: block; }
 .sb-playhead-mark.same-ch {
-  /* ghost when both on the same channel */
-  opacity: 0.28;
+  opacity: 0.32;
   background: var(--playhead, #ff4fd8);
 }
 .sb-playhead-mark.dim-ch {
-  opacity: 1;
+  opacity: 0.95;
 }
 .sb-playhead-mark .sb-ph-name {
   position: absolute;
   left: 0;
   top: 0;
   transform: translate(0, -100%);
-  padding: 0 0 1px 0;
-  font: 800 10px/1.15 system-ui, -apple-system, "Segoe UI", sans-serif;
+  padding: 0 0 2px 0;
+  font: 800 11px/1.15 system-ui, -apple-system, "Segoe UI", sans-serif;
   color: var(--playhead, #ff4fd8);
   white-space: nowrap;
-  max-width: 90px;
+  max-width: 100px;
   overflow: hidden;
   text-overflow: ellipsis;
-  text-shadow: 0 0 4px #000, 0 1px 2px #000;
+  text-shadow: 0 0 5px #000, 0 1px 2px #000, 0 0 1px #000;
   pointer-events: none;
 }
 .sb-playhead-mark.same-ch .sb-ph-name {
-  opacity: 0.75;
+  opacity: 0.85;
 }
+
+/* Discord-style typing line above chat input */
+#sb-mp-chat-typing {
+  min-height: 16px;
+  padding: 0 10px 4px;
+  font-size: 11px;
+  font-style: italic;
+  color: #777;
+  line-height: 1.3;
+}
+#sb-mp-chat-typing:empty { display: none; }
+#sb-mp-chat-typing:not(:empty) { display: block; }
 
 #sb-sync-pill {
   display: none;
@@ -1642,6 +1663,7 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
             <button type="button" class="sb-chat-clear" id="sb-mp-chat-clear" title="Owner only: clear chat">Clear</button>
           </div>
           <div id="sb-mp-chat-log"></div>
+          <div id="sb-mp-chat-typing" aria-live="polite"></div>
           <form id="sb-mp-chat-form" autocomplete="off">
             <input id="sb-mp-chat-input" type="text" maxlength="180" placeholder="Message the room…" disabled />
             <button type="submit" id="sb-mp-chat-send" disabled>Send</button>
@@ -1801,7 +1823,7 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
 
   // Native script load — Safari handles this much better than fetch+eval
   var s = document.createElement("script");
-  s.src = "chipbox-app.js?v=mp34";
+  s.src = "chipbox-app.js?v=mp35";
   s.async = false;
   s.onload = function () {
     setMsg("Engine loaded — starting…");

@@ -117,6 +117,7 @@ try {
   var chatInput = document.getElementById("sb-mp-chat-input");
   var chatSend = document.getElementById("sb-mp-chat-send");
   var chatClear = document.getElementById("sb-mp-chat-clear");
+  var chatTypingEl = document.getElementById("sb-mp-chat-typing");
   var gate = document.getElementById("sb-name-gate");
   var gateInput = document.getElementById("sb-gate-input");
   var gateGo = document.getElementById("sb-gate-go");
@@ -982,9 +983,23 @@ try {
     document.addEventListener("pointerdown", upd, { capture: true, passive: true });
   }
 
-  // BeepBox playhead presence: no mouse arrows. Marks use --playhead color (4px).
+  function namesMatch(a, b) {
+    return String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
+  }
+
+  // Fixed overlay on <body> — editor overflow was clipping remote marks so people only "saw themselves"
+  function ensurePresenceLayer() {
+    var layer = document.getElementById("sb-presence-layer");
+    if (!layer) {
+      layer = document.createElement("div");
+      layer.id = "sb-presence-layer";
+      document.body.appendChild(layer);
+    }
+    return layer;
+  }
+
   function ensurePlayheadMark(name) {
-    var layer = ensureCursorLayer();
+    var layer = ensurePresenceLayer();
     if (!layer) return null;
     var safe = String(name).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
     var id = "sb-ph-" + safe;
@@ -998,7 +1013,6 @@ try {
     } else if (el.parentNode !== layer) {
       layer.appendChild(el);
     }
-    // upgrade old custom track-line markup
     if (!el.classList.contains("sb-playhead-mark")) {
       el.className = "sb-playhead-mark dim-ch";
       el.innerHTML = '<span class="sb-ph-name"></span>';
@@ -1006,28 +1020,30 @@ try {
     return el;
   }
 
-  var _phGeom = { t: 0, rows: null, h: 28, playX: 40, boxW: 1 };
+  // Viewport geometry for BeepBox playhead X + each channel row Y
+  var _phGeom = { t: 0, rows: null, h: 28, playX: 80, playY0: 0 };
 
   function refreshPlayheadGeom(force) {
     var now = performance.now ? performance.now() : Date.now();
-    // playhead X updates every tick while playing; row Y can cache briefly
     var box = document.getElementById("beepboxEditorContainer");
     if (!box) return null;
     var boxRect = box.getBoundingClientRect();
-    if (boxRect.width < 2) return null;
+    if (boxRect.width < 2 || boxRect.height < 2) return null;
 
-    var needRows = force || !_phGeom.rows || (now - _phGeom.t) > 100;
     var PH = 28;
+    var needRows = force || !_phGeom.rows || (now - _phGeom.t) > 80;
     var rows = _phGeom.rows;
+
     if (needRows) {
       rows = [];
       var mute = box.querySelector(".muteEditor");
       var trackArea = box.querySelector(".trackAndMuteContainer");
+      // Prefer every mute button (true channel index 0..n-1)
       if (mute && mute.children && mute.children.length) {
         for (var i = 0; i < mute.children.length; i++) {
           var br = mute.children[i].getBoundingClientRect();
           rows[i] = {
-            top: br.top - boxRect.top,
+            top: br.top, // viewport Y (fixed positioning)
             h: Math.max(16, Math.min(36, br.height || PH))
           };
         }
@@ -1041,7 +1057,15 @@ try {
           }
         } catch (e0) {}
         for (var c = 0; c < nCh; c++) {
-          rows[c] = { top: (tr.top - boxRect.top) + c * PH, h: PH };
+          rows[c] = { top: tr.top + c * PH, h: PH };
+        }
+      }
+      // channelRows as backup
+      if (!rows.length) {
+        var chRows = box.querySelectorAll(".channelRow");
+        for (var cr = 0; cr < chRows.length; cr++) {
+          var rr = chRows[cr].getBoundingClientRect();
+          rows[cr] = { top: rr.top, h: Math.max(16, rr.height || PH) };
         }
       }
       _phGeom.t = now;
@@ -1049,24 +1073,26 @@ try {
       _phGeom.h = PH;
     }
 
-    // X = real BeepBox playhead (the pink line that moves on play)
+    // X = BeepBox playhead rect (prefer one overlapping the track strip)
     var playX = null;
     try {
-      // BeepBox uses rect width 4, fill V.playhead
+      var trackArea2 = box.querySelector(".trackAndMuteContainer");
+      var trackRect = trackArea2 ? trackArea2.getBoundingClientRect() : boxRect;
       var rects = box.querySelectorAll("svg rect");
       var best = null;
       for (var r = 0; r < rects.length; r++) {
         var node = rects[r];
         var rw = parseFloat(node.getAttribute("width") || "0");
         var rh = parseFloat(node.getAttribute("height") || "0");
-        if (rw >= 3 && rw <= 5 && rh >= PH) {
-          var gr = node.getBoundingClientRect();
-          // must be visibly inside editor
-          if (gr.width > 0 && gr.height >= PH && gr.left >= boxRect.left - 2 && gr.left <= boxRect.right + 2) {
-            if (!best || gr.height > best.h) {
-              best = { x: gr.left + gr.width * 0.5 - boxRect.left, h: gr.height };
-            }
-          }
+        if (!(rw >= 3 && rw <= 5 && rh >= PH * 0.8)) continue;
+        var gr = node.getBoundingClientRect();
+        if (gr.width <= 0 || gr.height < PH * 0.8) continue;
+        // score: prefer rects that overlap the track/mute band
+        var midY = gr.top + gr.height * 0.5;
+        var inTrack = midY >= trackRect.top - 8 && midY <= trackRect.bottom + 8;
+        var score = (inTrack ? 10000 : 0) + gr.height;
+        if (!best || score > best.score) {
+          best = { x: gr.left + gr.width * 0.5, score: score };
         }
       }
       if (best) playX = best.x;
@@ -1078,8 +1104,8 @@ try {
         var ph = 0;
         if (d && d.synth && typeof d.synth.playhead === "number") ph = d.synth.playhead;
         else if (d && typeof d.bar === "number") ph = d.bar;
-        var trackArea2 = box.querySelector(".trackAndMuteContainer");
         var mute2 = box.querySelector(".muteEditor");
+        var ta = box.querySelector(".trackAndMuteContainer");
         var barW = 32;
         var cells = box.querySelectorAll(".channelBox");
         if (cells.length >= 2) {
@@ -1087,25 +1113,26 @@ try {
           var c1 = cells[1].getBoundingClientRect();
           if (c1.left > c0.left + 2) barW = c1.left - c0.left;
         }
-        var left0 = trackArea2
-          ? trackArea2.getBoundingClientRect().left - boxRect.left
-          : 0;
+        var left0 = ta ? ta.getBoundingClientRect().left : boxRect.left;
         var muteW = mute2 ? mute2.getBoundingClientRect().width : 32;
         playX = left0 + muteW + ph * barW;
       } catch (e2) {
-        playX = 80;
+        playX = boxRect.left + 80;
       }
     }
 
-    _phGeom.playX = Math.max(2, Math.min(boxRect.width - 4, playX));
-    _phGeom.boxW = boxRect.width;
+    _phGeom.playX = playX;
     return _phGeom;
   }
 
   function placePlayheadMark(t, name, myName, myCh) {
-    if (!t || !name || name === myName) {
-      if (t && t.trackEl) t.trackEl.style.display = "none";
-      if (t && t.el) t.el.style.display = "none";
+    if (!t || !name) return;
+    // Never draw your own mark (BeepBox already shows your playhead/selection)
+    if (namesMatch(name, myName)) {
+      if (t.trackEl) {
+        t.trackEl.classList.remove("sb-on");
+        t.trackEl.style.display = "none";
+      }
       return;
     }
     var chN = (typeof t.channel === "number" && !isNaN(t.channel)) ? (t.channel | 0) : 0;
@@ -1113,28 +1140,38 @@ try {
     var same = chN === (myCh | 0);
 
     var g = refreshPlayheadGeom(false);
+    var el = t.trackEl || ensurePlayheadMark(name);
+    t.trackEl = el;
+    if (!el) return;
+
     if (!g || !g.rows || !g.rows.length) {
-      if (t.trackEl) t.trackEl.style.display = "none";
+      el.classList.remove("sb-on");
+      el.style.display = "none";
       return;
     }
     var row = g.rows[chN];
     if (!row) {
       var last = g.rows[g.rows.length - 1];
-      row = { top: last.top + (chN - (g.rows.length - 1)) * g.h, h: g.h };
+      row = {
+        top: last.top + (chN - (g.rows.length - 1)) * (g.h || 28),
+        h: g.h || 28
+      };
     }
 
-    var el = t.trackEl || ensurePlayheadMark(name);
-    t.trackEl = el;
-    if (!el) return;
-    // hide leftover arrow nodes
-    if (t.el) t.el.style.display = "none";
+    // Skip if row is way off-screen (scrolled away)
+    var vh = window.innerHeight || 800;
+    if (row.top + row.h < -20 || row.top > vh + 20) {
+      el.classList.remove("sb-on");
+      el.style.display = "none";
+      return;
+    }
 
+    el.classList.add("sb-on");
     el.style.display = "block";
     el.style.left = g.playX + "px";
     el.style.top = (row.top + 1) + "px";
     el.style.width = "4px";
     el.style.height = Math.max(14, row.h - 2) + "px";
-    // force BeepBox playhead color (theme may change)
     el.style.background = "var(--playhead, #ff4fd8)";
 
     if (same) {
@@ -1147,25 +1184,22 @@ try {
     var nm = el.querySelector(".sb-ph-name");
     if (nm) {
       nm.textContent = name || "?";
-      // slight stack if multiple ghosts on same channel
       var stack = 0;
       var keys = Object.keys(cursorTargets);
       for (var i = 0; i < keys.length; i++) {
         var on = keys[i];
-        if (on === myName || on === name) continue;
+        if (namesMatch(on, myName) || namesMatch(on, name)) continue;
         var ot = cursorTargets[on];
         if (!ot) continue;
         var oc = (typeof ot.channel === "number") ? (ot.channel | 0) : 0;
-        if (oc === chN) {
-          if (on < name) stack++;
-        }
+        if (oc === chN && on < name) stack++;
       }
-      nm.style.transform = "translate(" + (stack * 8) + "px, -100%)";
+      nm.style.transform = "translate(" + (stack * 10) + "px, -100%)";
     }
     el.title = (name || "?") + " · track " + chN + (same ? " · same channel (ghost)" : "");
   }
 
-  var PH_TICK_MS = 33; // follow playhead smoothly while playing
+  var PH_TICK_MS = 33;
   var lastPhTick = 0;
 
   function startCursorAnim() {
@@ -1177,7 +1211,7 @@ try {
       if (now - lastPhTick < PH_TICK_MS) return;
       lastPhTick = now;
 
-      ensureCursorLayer();
+      ensurePresenceLayer();
       refreshPlayheadGeom(false);
       var myCh = currentChannel();
       var myName = getName();
@@ -1196,7 +1230,7 @@ try {
     if (cursorRaf) cancelAnimationFrame(cursorRaf);
     cursorRaf = 0;
     cursorTargets = {};
-    var layer = document.getElementById("sb-cursor-layer");
+    var layer = document.getElementById("sb-presence-layer");
     if (layer) layer.innerHTML = "";
   }
 
@@ -1208,7 +1242,7 @@ try {
 
     for (var i = 0; i < list.length; i++) {
       var p = list[i];
-      if (!p || !p.name || p.name === myName) continue;
+      if (!p || !p.name || namesMatch(p.name, myName)) continue;
       live[p.name] = true;
       var pCh = (p.channel != null && p.channel !== "" && !isNaN(+p.channel)) ? (+p.channel | 0) : 0;
       if (pCh < 0) pCh = 0;
@@ -1218,21 +1252,18 @@ try {
         cur = cursorTargets[p.name] = {
           channel: pCh,
           trackEl: ensurePlayheadMark(p.name),
-          el: null,
           lastCh: pCh
         };
       } else {
         cur.channel = pCh;
         cur.lastCh = pCh;
         if (!cur.trackEl) cur.trackEl = ensurePlayheadMark(p.name);
-        if (cur.el) cur.el.style.display = "none";
       }
     }
     Object.keys(cursorTargets).forEach(function (name) {
       if (!live[name]) {
         try {
           var dead = cursorTargets[name];
-          if (dead.el && dead.el.parentNode) dead.el.parentNode.removeChild(dead.el);
           if (dead.trackEl && dead.trackEl.parentNode) dead.trackEl.parentNode.removeChild(dead.trackEl);
         } catch (e) {}
         delete cursorTargets[name];
@@ -1929,13 +1960,75 @@ try {
     }
   }
 
+  // Discord-style "X is typing…"
+  var typingTimer = null;
+  var typingActive = false;
+  var remoteTyping = [];
+
+  function setTypingUi(names) {
+    remoteTyping = names || [];
+    if (!chatTypingEl) return;
+    var me = getName();
+    var others = remoteTyping.filter(function (n) {
+      return n && !namesMatch(n, me);
+    });
+    if (!others.length) {
+      chatTypingEl.textContent = "";
+      return;
+    }
+    if (others.length === 1) {
+      chatTypingEl.textContent = others[0] + " is typing…";
+    } else if (others.length === 2) {
+      chatTypingEl.textContent = others[0] + " and " + others[1] + " are typing…";
+    } else {
+      chatTypingEl.textContent = others[0] + " and " + (others.length - 1) + " others are typing…";
+    }
+  }
+
+  function sendTyping(active) {
+    if (!room || !ws || ws.readyState !== 1) return;
+    if (typingActive === active && active) return;
+    typingActive = !!active;
+    try {
+      ws.send(JSON.stringify({
+        type: "typing",
+        active: typingActive,
+        name: getName(),
+        room: room
+      }));
+    } catch (e) {}
+  }
+
+  function bumpTyping() {
+    if (!room) return;
+    sendTyping(true);
+    if (typingTimer) clearTimeout(typingTimer);
+    typingTimer = setTimeout(function () {
+      typingTimer = null;
+      sendTyping(false);
+    }, 2200);
+  }
+
   if (chatForm) {
     chatForm.addEventListener("submit", function (e) {
       e.preventDefault();
       if (!chatInput) return;
       var t = chatInput.value;
       chatInput.value = "";
+      if (typingTimer) { clearTimeout(typingTimer); typingTimer = null; }
+      sendTyping(false);
       sendChat(t);
+    });
+  }
+  if (chatInput) {
+    chatInput.addEventListener("input", function () {
+      if (!room) return;
+      if (chatInput.value && chatInput.value.trim()) bumpTyping();
+      else sendTyping(false);
+    });
+    chatInput.addEventListener("blur", function () {
+      if (typingTimer) { clearTimeout(typingTimer); typingTimer = null; }
+      sendTyping(false);
     });
   }
   if (chatClear) {
@@ -2595,9 +2688,12 @@ try {
       }
     } else if (msg.type === "chat") {
       appendChatLine(msg);
+      // someone sent a message — refresh typing line will arrive separately
     } else if (msg.type === "chat_clear") {
       clearChatLog();
       appendChatLine({ sys: true, text: "Chat cleared by " + (msg.by || "owner") });
+    } else if (msg.type === "typing") {
+      setTypingUi(msg.names || []);
     } else if (msg.type === "left") {
       room = null;
       wantRoom = null;
@@ -2610,6 +2706,8 @@ try {
       renderPeers([]);
       clearChatLog();
       setChatOpen(false);
+      setTypingUi([]);
+      sendTyping(false);
       setStatus("Left server — solo", "");
     }
   }
@@ -2894,6 +2992,9 @@ try {
     renderPeers([]);
     clearChatLog();
     setChatOpen(false);
+    setTypingUi([]);
+    if (typingTimer) { clearTimeout(typingTimer); typingTimer = null; }
+    typingActive = false;
     setStatus("Left room — still online", "");
     setSyncPill(false);
     try {
