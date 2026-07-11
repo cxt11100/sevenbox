@@ -188,12 +188,14 @@ class Room:
             "bar": 0,
             "playhead": 0.0,
         }
+        self.bpm: int = 150  # BeepBox default; updated from clients
         self._presence_dirty = False
         self._presence_flush_task: asyncio.Task | None = None
         self._hb_tick = 0
         self._chat_last: dict[ServerConnection, float] = {}
         self.chat_log: list[dict[str, Any]] = []  # last messages for late joiners
         self.typing: dict[ServerConnection, float] = {}  # ws -> last typing time
+        self._lobby_sig: str = ""  # playing|bpm|count — only rebroadcast list when this changes
 
     def peer_list(self) -> list[dict[str, Any]]:
         out = []
@@ -235,6 +237,12 @@ class Room:
 
     def lobby_entry(self) -> dict[str, Any]:
         host_name = self.names.get(self.host, "host")
+        playing = bool((self.last_transport or {}).get("playing"))
+        bpm = int(self.bpm or 150)
+        if bpm < 30:
+            bpm = 30
+        if bpm > 500:
+            bpm = 500
         return {
             "code": self.code,
             "title": self.title,
@@ -244,7 +252,13 @@ class Room:
             "count": len(self.clients),
             "defaultRole": self.default_role,
             "created": int(self.created),
+            "playing": playing,
+            "bpm": bpm,
         }
+
+    def lobby_sig(self) -> str:
+        e = self.lobby_entry()
+        return f"{e['playing']}:{e['bpm']}:{e['count']}:{e['title']}:{e['host']}"
 
 
 rooms: dict[str, Room] = {}
@@ -324,8 +338,38 @@ def new_code() -> str:
 
 def public_lobby() -> list[dict[str, Any]]:
     entries = [r.lobby_entry() for r in rooms.values() if r.public]
-    entries.sort(key=lambda e: (-e["count"], -e["created"]))
+    # Playing rooms first, then more people, then newest
+    entries.sort(
+        key=lambda e: (
+            0 if e.get("playing") else 1,
+            -int(e.get("count") or 0),
+            -int(e.get("created") or 0),
+        )
+    )
     return entries
+
+
+def _clamp_bpm(raw: Any, default: int = 150) -> int:
+    try:
+        bpm = int(raw)
+    except (TypeError, ValueError):
+        return default
+    if bpm < 30:
+        return 30
+    if bpm > 500:
+        return 500
+    return bpm
+
+
+async def maybe_broadcast_lobby(room: Room) -> None:
+    """Refresh public list only when play/bpm/count/title actually changed."""
+    if not room.public:
+        return
+    sig = room.lobby_sig()
+    if sig == room._lobby_sig:
+        return
+    room._lobby_sig = sig
+    await broadcast_lobby()
 
 
 async def send(ws: ServerConnection, payload: dict[str, Any]) -> None:
@@ -588,6 +632,9 @@ async def ws_handler(ws: ServerConnection) -> None:
                     if len(song) <= MAX_SONG_CHARS:
                         room.song = song
                         room.song_ts = int(msg.get("ts") or time.time() * 1000)
+                if msg.get("bpm") is not None:
+                    room.bpm = _clamp_bpm(msg.get("bpm"), 150)
+                room._lobby_sig = room.lobby_sig()
                 rooms[code] = room
                 client_room[ws] = code
                 await send(
@@ -606,6 +653,7 @@ async def ws_handler(ws: ServerConnection) -> None:
                         "ts": room.song_ts,
                         "chat": room.chat_log[-30:],
                         "isOwner": is_seven_name(name),
+                        "bpm": room.bpm,
                     },
                 )
                 await broadcast_lobby()
@@ -726,6 +774,8 @@ async def ws_handler(ws: ServerConnection) -> None:
                     continue
                 room.song = song
                 room.song_ts = ts or int(time.time() * 1000)
+                if msg.get("bpm") is not None:
+                    room.bpm = _clamp_bpm(msg.get("bpm"), room.bpm or 150)
                 await broadcast_room(
                     room,
                     {
@@ -736,9 +786,11 @@ async def ws_handler(ws: ServerConnection) -> None:
                         "ts": room.song_ts,
                         "seq": int(msg.get("seq") or 0),
                         "sig": song_sig(song),
+                        "bpm": room.bpm,
                     },
                     skip=ws,
                 )
+                await maybe_broadcast_lobby(room)
 
             elif mtype == "transport":
                 code = client_room.get(ws)
@@ -757,6 +809,8 @@ async def ws_handler(ws: ServerConnection) -> None:
                     "bar": int(msg.get("bar") or 0),
                     "playhead": float(msg.get("playhead") or 0),
                 }
+                if msg.get("bpm") is not None:
+                    room.bpm = _clamp_bpm(msg.get("bpm"), room.bpm or 150)
                 await broadcast_room(
                     room,
                     {
@@ -767,9 +821,11 @@ async def ws_handler(ws: ServerConnection) -> None:
                         "restart": restart,
                         "from": room.names.get(ws, "player"),
                         "ts": int(msg.get("ts") or time.time() * 1000),
+                        "bpm": room.bpm,
                     },
                     skip=ws,
                 )
+                await maybe_broadcast_lobby(room)
 
             elif mtype == "set_default_role":
                 code = client_room.get(ws)

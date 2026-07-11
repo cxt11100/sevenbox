@@ -1422,6 +1422,19 @@ try {
     }
   }
 
+  function currentBpm() {
+    try {
+      var d = doc();
+      if (d && d.song && typeof d.song.tempo === "number" && !isNaN(d.song.tempo)) {
+        var t = d.song.tempo | 0;
+        if (t < 30) t = 30;
+        if (t > 500) t = 500;
+        return t;
+      }
+    } catch (e) {}
+    return 150;
+  }
+
   function getTransport() {
     try {
       var d = doc();
@@ -1441,7 +1454,7 @@ try {
         else if (typeof d.synth.bar === "number") bar = d.synth.bar | 0;
         else bar = Math.floor(playhead) | 0;
       } catch (e) {}
-      return { playing: playing, bar: bar|0, playhead: +playhead || 0 };
+      return { playing: playing, bar: bar|0, playhead: +playhead || 0, bpm: currentBpm() };
     } catch (e) {
       return null;
     }
@@ -1579,6 +1592,7 @@ try {
       playing: playing,
       bar: bar,
       playhead: t.playhead != null ? t.playhead : bar,
+      bpm: t.bpm != null ? t.bpm : currentBpm(),
       restart: restart,
       room: room,
       tabId: tabId,
@@ -1651,6 +1665,7 @@ try {
     var payload = {
       type: "state",
       song: s,
+      bpm: currentBpm(),
       ts: ts,
       seq: localSeq,
       room: room,
@@ -2051,9 +2066,12 @@ try {
     for (var i = 0; i < lobbyServers.length; i++) {
       (function (srv) {
         var row = document.createElement("div");
-        row.className = "sb-srv";
+        row.className = "sb-srv" + (srv.playing ? " is-playing" : "");
         var hostBit = escapeHtml(srv.host || "?");
         if (srv.hostIsOwner) hostBit = '<span class="sb-owner-tag">' + hostBit + " · owner</span>";
+        var bpm = (srv.bpm != null && !isNaN(+srv.bpm)) ? (+srv.bpm | 0) : 150;
+        if (bpm < 30) bpm = 30;
+        if (bpm > 500) bpm = 500;
         var main = document.createElement("div");
         main.className = "sb-srv-main";
         main.innerHTML =
@@ -2062,9 +2080,15 @@ try {
           " · " + escapeHtml(srv.code || "?") +
           (srv.defaultRole === "view" ? " · view" : "") +
           "</div>";
-        var count = document.createElement("span");
-        count.className = "sb-srv-count";
-        count.textContent = (srv.count || 1) + " online";
+        var status = document.createElement("div");
+        status.className = "sb-srv-status";
+        status.innerHTML =
+          '<span class="sb-srv-play ' + (srv.playing ? "on" : "off") + '" title="' +
+            (srv.playing ? "Room is playing" : "Room is stopped") + '">' +
+            (srv.playing ? "▶ Playing" : "■ Stopped") +
+          "</span>" +
+          '<span class="sb-srv-bpm" title="Song tempo">' + bpm + " BPM</span>" +
+          '<span class="sb-srv-count">' + (srv.count || 1) + " online</span>";
         var btn = document.createElement("button");
         btn.type = "button";
         btn.textContent = "Join";
@@ -2074,7 +2098,7 @@ try {
           joinWithCode(srv.code);
         });
         row.appendChild(main);
-        row.appendChild(count);
+        row.appendChild(status);
         row.appendChild(btn);
         lobbyList.appendChild(row);
       })(lobbyServers[i]);
@@ -2919,6 +2943,7 @@ try {
           title: title,
           public: isPublic,
           song: currentSong(),
+          bpm: currentBpm(),
           defaultRole: defRole,
           channel: currentChannel(),
           bar: currentBar()
