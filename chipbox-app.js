@@ -1140,16 +1140,21 @@ try {
     if (!el) {
       el = document.createElement("div");
       el.id = id;
-      el.className = "sb-playhead-mark dim-ch";
-      // bar = the actual pink line; name is only a label on it
-      el.innerHTML = '<div class="sb-ph-bar"></div><span class="sb-ph-name"></span>';
+      el.className = "sb-playhead-mark is-ghost";
+      el.innerHTML =
+        '<div class="sb-ph-bar"></div>' +
+        '<div class="sb-ph-wash"></div>' +
+        '<span class="sb-ph-name"></span>';
       layer.appendChild(el);
     } else if (el.parentNode !== layer) {
       layer.appendChild(el);
     }
-    if (!el.querySelector(".sb-ph-bar")) {
-      el.className = "sb-playhead-mark dim-ch";
-      el.innerHTML = '<div class="sb-ph-bar"></div><span class="sb-ph-name"></span>';
+    if (!el.querySelector(".sb-ph-bar") || !el.querySelector(".sb-ph-wash")) {
+      el.className = "sb-playhead-mark is-ghost";
+      el.innerHTML =
+        '<div class="sb-ph-bar"></div>' +
+        '<div class="sb-ph-wash"></div>' +
+        '<span class="sb-ph-name"></span>';
     }
     return el;
   }
@@ -1299,7 +1304,7 @@ try {
 
   function placePlayheadMark(t, name, myName, myCh) {
     if (!t || !name) return;
-    // Never draw your own mark — BeepBox already draws YOUR solid playhead
+    // Never draw your own — BeepBox already draws YOUR solid full playhead
     if (namesMatch(name, myName)) {
       if (t.trackEl) {
         t.trackEl.classList.remove("sb-on");
@@ -1310,38 +1315,10 @@ try {
     var chN = (typeof t.channel === "number" && !isNaN(t.channel)) ? (t.channel | 0) : 0;
     if (chN < 0) chN = 0;
 
-    // Ghost if they're the only one on that track; solid pink if 2+ share it
-    var onCh = countPlayersOnChannel(chN);
-    var solid = onCh >= 2;
+    // Ghost = alone on that track; solid BeepBox pink = 2+ people on it
+    var solid = countPlayersOnChannel(chN) >= 2;
 
     var g = refreshPlayheadGeom(false);
-    // refresh X every time (playhead moves); rows cache inside refresh
-    g = refreshPlayheadGeom(false);
-    // force playhead X update each call
-    try {
-      var box = document.getElementById("beepboxEditorContainer");
-      if (box) {
-        var d = doc();
-        if (d && d.synth && typeof d.synth.playhead === "number") {
-          var ta = box.querySelector(".trackAndMuteContainer");
-          var mute2 = box.querySelector(".muteEditor");
-          var barW = 32;
-          var cells = box.querySelectorAll(".channelBox");
-          if (cells.length >= 2) {
-            var c0 = cells[0].getBoundingClientRect();
-            var c1 = cells[1].getBoundingClientRect();
-            if (c1.left > c0.left + 2) barW = c1.left - c0.left;
-          }
-          var left0 = ta ? ta.getBoundingClientRect().left : box.getBoundingClientRect().left;
-          var muteW = mute2 ? mute2.getBoundingClientRect().width : 32;
-          // prefer live SVG playhead if refresh found one
-          if (g && (g.playX == null || isNaN(g.playX))) {
-            g.playX = left0 + muteW + d.synth.playhead * barW;
-          }
-        }
-      }
-    } catch (ePh) {}
-
     var el = t.trackEl || ensurePlayheadMark(name);
     t.trackEl = el;
     if (!el) return;
@@ -1373,14 +1350,24 @@ try {
     }
 
     var phColor = g.color || getBeepBoxPlayheadColor();
-    // ONE track row high — original BeepBox pink playhead style (4px)
     var barH = Math.max(22, Math.min(30, (row.h | 0) || 26));
+
+    /*
+     * WHY we don't put a 4px sliver on top of BeepBox's full playhead:
+     * It becomes invisible (same color, full-height line behind it) and only
+     * the name appears to "move up/down" — exactly the bug in the recording.
+     *
+     * Instead: band sits on the channel ROW starting at the playhead X and
+     * extending right so you see a clear per-track pink region + 4px edge.
+     */
+    var bandW = Math.min(160, Math.max(72, Math.round((window.innerWidth || 800) * 0.12)));
+    var leftX = Math.round(g.playX);
 
     el.classList.add("sb-on");
     el.style.display = "block";
-    el.style.left = Math.round(g.playX) + "px";
+    el.style.left = leftX + "px";
     el.style.top = Math.round(row.top) + "px";
-    el.style.width = "4px";
+    el.style.width = bandW + "px";
     el.style.height = barH + "px";
     el.style.maxHeight = barH + "px";
     el.style.minHeight = barH + "px";
@@ -1393,22 +1380,30 @@ try {
       el.classList.add("is-ghost");
       el.classList.remove("is-solid");
     }
-    // legacy classes
-    el.classList.remove("same-ch", "dim-ch");
 
     var bar = el.querySelector(".sb-ph-bar");
     if (bar) {
       bar.style.background = phColor;
-      bar.style.height = "100%";
-      bar.style.width = "4px";
-      bar.style.opacity = solid ? "1" : "0.32";
+      bar.style.opacity = solid ? "1" : "0.4";
+    }
+    var wash = el.querySelector(".sb-ph-wash");
+    if (wash) {
+      if (solid) {
+        wash.style.background = "rgba(255, 79, 216, 0.18)";
+        wash.style.border = "1px solid " + phColor;
+        wash.style.borderLeft = "none";
+      } else {
+        wash.style.background = "rgba(255, 79, 216, 0.08)";
+        wash.style.border = "1px dashed " + phColor;
+        wash.style.borderLeft = "none";
+        wash.style.opacity = "0.9";
+      }
     }
 
     var nm = el.querySelector(".sb-ph-name");
     if (nm) {
       nm.textContent = name || "?";
       nm.style.color = phColor;
-      // top-left of THIS channel's pink segment
       var stack = 0;
       var keys = Object.keys(cursorTargets);
       for (var i = 0; i < keys.length; i++) {
@@ -1419,12 +1414,12 @@ try {
         var oc = (typeof ot.channel === "number") ? (ot.channel | 0) : 0;
         if (oc === chN && on < name) stack++;
       }
-      nm.style.left = "0px";
-      nm.style.top = "0px";
-      nm.style.transform = "translate(" + (stack * 8) + "px, calc(-100% - 1px))";
+      nm.style.left = (8 + stack * 70) + "px";
+      nm.style.top = "50%";
+      nm.style.transform = "translateY(-50%)";
     }
     el.title = (name || "?") + " · track " + chN +
-      (solid ? " · shared track (solid)" : " · alone on track (ghost)");
+      (solid ? " · 2+ on this track (solid pink)" : " · alone on track (ghost pink)");
   }
 
   var PH_TICK_MS = 33;
