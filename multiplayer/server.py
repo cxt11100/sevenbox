@@ -377,6 +377,31 @@ class Room:
             },
         }
 
+    def lobby_entry(self) -> dict[str, Any]:
+        host_name = self.names.get(self.host, "host")
+        playing = bool((self.last_transport or {}).get("playing"))
+        bpm = int(self.bpm or 150)
+        if bpm < 30:
+            bpm = 30
+        if bpm > 500:
+            bpm = 500
+        return {
+            "code": self.code,
+            "title": self.title,
+            "public": self.public,
+            "host": host_name,
+            "hostIsOwner": is_seven_name(host_name),
+            "count": len(self.clients),
+            "defaultRole": self.default_role,
+            "created": int(self.created),
+            "playing": playing,
+            "bpm": bpm,
+        }
+
+    def lobby_sig(self) -> str:
+        e = self.lobby_entry()
+        return f"{e['playing']}:{e['bpm']}:{e['count']}:{e['title']}:{e['host']}"
+
 
 def lan_urls(port: int) -> list[str]:
     """Best-effort LAN URLs for party mode (same Wi‑Fi)."""
@@ -412,31 +437,6 @@ def can_moderate(room: Room, ws: ServerConnection) -> bool:
         return True
     nm = room.names.get(ws, "")
     return is_seven_name(nm)
-
-    def lobby_entry(self) -> dict[str, Any]:
-        host_name = self.names.get(self.host, "host")
-        playing = bool((self.last_transport or {}).get("playing"))
-        bpm = int(self.bpm or 150)
-        if bpm < 30:
-            bpm = 30
-        if bpm > 500:
-            bpm = 500
-        return {
-            "code": self.code,
-            "title": self.title,
-            "public": self.public,
-            "host": host_name,
-            "hostIsOwner": is_seven_name(host_name),
-            "count": len(self.clients),
-            "defaultRole": self.default_role,
-            "created": int(self.created),
-            "playing": playing,
-            "bpm": bpm,
-        }
-
-    def lobby_sig(self) -> str:
-        e = self.lobby_entry()
-        return f"{e['playing']}:{e['bpm']}:{e['count']}:{e['title']}:{e['host']}"
 
 
 rooms: dict[str, Room] = {}
@@ -767,87 +767,97 @@ async def ws_handler(ws: ServerConnection) -> None:
                 await send(ws, presence_stats())
 
             elif mtype == "create":
-                await leave(ws)
-                ok, name_or_err = validate_player_name(
-                    str(msg.get("name") or ""), msg.get("nameKey")
-                )
-                if not ok:
-                    await send(ws, {"type": "error", "message": name_or_err})
-                    continue
-                name = name_or_err
-                if is_name_taken(name, except_ws=ws):
+                try:
+                    await leave(ws)
+                    ok, name_or_err = validate_player_name(
+                        str(msg.get("name") or ""), msg.get("nameKey")
+                    )
+                    if not ok:
+                        await send(ws, {"type": "error", "message": name_or_err})
+                        continue
+                    name = name_or_err
+                    if is_name_taken(name, except_ws=ws):
+                        await send(
+                            ws,
+                            {
+                                "type": "error",
+                                "message": "That name is already online. Change the numbers (e.g. alex483).",
+                            },
+                        )
+                        continue
+                    # blank title → random fun name (not just "Untitled")
+                    raw_title = " ".join(str(msg.get("title") or "").strip().split())
+                    title = normalize_title(raw_title) if raw_title else random_room_title()
+                    public = bool(msg.get("public", True))
+                    role_default = str(msg.get("defaultRole") or "edit").lower()
+                    if role_default not in ("edit", "view"):
+                        role_default = "edit"
+
+                    code = new_code()
+                    room = Room(code, ws, name, title, public)
+                    room.default_role = role_default
+                    room.clients.add(ws)
+                    room.names[ws] = name
+                    room.roles[ws] = "host"
+                    try:
+                        ch0 = int(msg.get("channel") if msg.get("channel") is not None else 0)
+                    except (TypeError, ValueError):
+                        ch0 = 0
+                    try:
+                        bar0 = int(msg.get("bar") if msg.get("bar") is not None else 0)
+                    except (TypeError, ValueError):
+                        bar0 = 0
+                    if ch0 < 0:
+                        ch0 = 0
+                    if bar0 < 0:
+                        bar0 = 0
+                    room.presence[ws] = {
+                        "channel": ch0,
+                        "bar": bar0,
+                        "status": "edit",
+                    }
+                    if msg.get("song"):
+                        song = str(msg["song"])
+                        if len(song) <= MAX_SONG_CHARS:
+                            room.song = song
+                            room.song_ts = int(msg.get("ts") or time.time() * 1000)
+                    if msg.get("bpm") is not None:
+                        room.bpm = _clamp_bpm(msg.get("bpm"), 150)
+                    room._lobby_sig = room.lobby_sig()
+                    rooms[code] = room
+                    client_room[ws] = code
+                    room.add_jam(f"{name} hosted the room", "join")
+                    extras = room.room_extras()
+                    await send(
+                        ws,
+                        {
+                            "type": "created",
+                            "room": code,
+                            "title": room.title,
+                            "public": room.public,
+                            "role": "host",
+                            "defaultRole": room.default_role,
+                            "count": 1,
+                            "peers": room.peer_list(),
+                            "song": room.song,
+                            "transport": room.last_transport,
+                            "ts": room.song_ts,
+                            "chat": room.chat_log[-30:],
+                            "isOwner": is_seven_name(name),
+                            "bpm": room.bpm,
+                            **extras,
+                        },
+                    )
+                    await broadcast_lobby()
+                except Exception as e:
+                    logging.exception("create room failed")
                     await send(
                         ws,
                         {
                             "type": "error",
-                            "message": "That name is already online. Change the numbers (e.g. alex483).",
+                            "message": "Couldn't create room: " + str(e)[:80],
                         },
                     )
-                    continue
-                # blank title → random fun name (not just "Untitled")
-                raw_title = " ".join(str(msg.get("title") or "").strip().split())
-                title = normalize_title(raw_title) if raw_title else random_room_title()
-                public = bool(msg.get("public", True))
-                role_default = str(msg.get("defaultRole") or "edit").lower()
-                if role_default not in ("edit", "view"):
-                    role_default = "edit"
-
-                code = new_code()
-                room = Room(code, ws, name, title, public)
-                room.default_role = role_default
-                room.clients.add(ws)
-                room.names[ws] = name
-                room.roles[ws] = "host"
-                try:
-                    ch0 = int(msg.get("channel") if msg.get("channel") is not None else 0)
-                except (TypeError, ValueError):
-                    ch0 = 0
-                try:
-                    bar0 = int(msg.get("bar") if msg.get("bar") is not None else 0)
-                except (TypeError, ValueError):
-                    bar0 = 0
-                if ch0 < 0:
-                    ch0 = 0
-                if bar0 < 0:
-                    bar0 = 0
-                room.presence[ws] = {
-                    "channel": ch0,
-                    "bar": bar0,
-                    "status": "edit",
-                }
-                if msg.get("song"):
-                    song = str(msg["song"])
-                    if len(song) <= MAX_SONG_CHARS:
-                        room.song = song
-                        room.song_ts = int(msg.get("ts") or time.time() * 1000)
-                if msg.get("bpm") is not None:
-                    room.bpm = _clamp_bpm(msg.get("bpm"), 150)
-                room._lobby_sig = room.lobby_sig()
-                rooms[code] = room
-                client_room[ws] = code
-                room.add_jam(f"{name} hosted the room", "join")
-                extras = room.room_extras()
-                await send(
-                    ws,
-                    {
-                        "type": "created",
-                        "room": code,
-                        "title": room.title,
-                        "public": room.public,
-                        "role": "host",
-                        "defaultRole": room.default_role,
-                        "count": 1,
-                        "peers": room.peer_list(),
-                        "song": room.song,
-                        "transport": room.last_transport,
-                        "ts": room.song_ts,
-                        "chat": room.chat_log[-30:],
-                        "isOwner": is_seven_name(name),
-                        "bpm": room.bpm,
-                        **extras,
-                    },
-                )
-                await broadcast_lobby()
 
             elif mtype == "join":
                 code = normalize_code(msg.get("room"))
