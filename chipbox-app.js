@@ -1151,7 +1151,7 @@ try {
 
   function placePlayheadMark(t, name, myName, myCh) {
     if (!t || !name) return;
-    // Never draw your own mark (BeepBox already shows your real playhead)
+    // Never draw your own mark (BeepBox already shows your real full-height playhead)
     if (namesMatch(name, myName)) {
       if (t.trackEl) {
         t.trackEl.classList.remove("sb-on");
@@ -1163,7 +1163,8 @@ try {
     if (chN < 0) chN = 0;
     var same = chN === (myCh | 0);
 
-    var g = refreshPlayheadGeom(false);
+    // Always refresh row Y (channel change) + playhead X (moves when playing)
+    var g = refreshPlayheadGeom(true);
     var el = t.trackEl || ensurePlayheadMark(name);
     t.trackEl = el;
     if (!el) return;
@@ -1176,6 +1177,11 @@ try {
     var row = g.rows[chN];
     if (!row) {
       var last = g.rows[g.rows.length - 1];
+      if (!last) {
+        el.classList.remove("sb-on");
+        el.style.display = "none";
+        return;
+      }
       row = {
         top: last.top + (chN - (g.rows.length - 1)) * (g.h || 28),
         h: g.h || 28
@@ -1190,21 +1196,26 @@ try {
     }
 
     var phColor = g.color || getBeepBoxPlayheadColor();
-    var barH = Math.max(18, row.h - 2);
+    // ONE channel row only — never full-height (that was blending into BeepBox's real playhead)
+    var barH = Math.max(20, Math.min(32, (row.h | 0) || 26));
 
     el.classList.add("sb-on");
     el.style.display = "block";
+    // Align to BeepBox playhead column (moves when you press Play)
     el.style.left = Math.round(g.playX) + "px";
-    el.style.top = Math.round(row.top + 1) + "px";
+    el.style.top = Math.round(row.top) + "px";
     el.style.width = "4px";
     el.style.height = barH + "px";
+    el.style.maxHeight = barH + "px";
+    el.style.minHeight = barH + "px";
+    el.style.overflow = "visible";
 
     var bar = el.querySelector(".sb-ph-bar");
     if (bar) {
       bar.style.background = phColor;
-      bar.style.height = "100%";
+      bar.style.height = barH + "px";
       bar.style.width = "4px";
-      bar.style.opacity = same ? "0.3" : "1";
+      bar.style.opacity = same ? "0.28" : "1";
     }
 
     if (same) {
@@ -1219,6 +1230,7 @@ try {
     if (nm) {
       nm.textContent = name || "?";
       nm.style.color = phColor;
+      // name sits on the channel row, just right of the short bar (not floating above the whole grid)
       var stack = 0;
       var keys = Object.keys(cursorTargets);
       for (var i = 0; i < keys.length; i++) {
@@ -1229,7 +1241,9 @@ try {
         var oc = (typeof ot.channel === "number") ? (ot.channel | 0) : 0;
         if (oc === chN && on < name) stack++;
       }
-      nm.style.transform = "translate(" + (stack * 10) + "px, calc(-100% - 1px))";
+      nm.style.left = "6px";
+      nm.style.top = (2 + stack * 12) + "px";
+      nm.style.transform = "none";
     }
     el.title = (name || "?") + " · track " + chN + (same ? " · same channel (ghost)" : "");
   }

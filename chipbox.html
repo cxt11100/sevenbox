@@ -464,10 +464,10 @@ body {
 }
 
 /*
- * Remote player = BeepBox playhead bar (4px pink) on THEIR channel row.
- * Color is set in JS from BeepBox's real --playhead (CSS var is often scoped
- * under the editor, so body overlays can't see it without that).
- * Name sits top-left of the bar. Same channel as you → ghost bar.
+ * Remote player presence on the TRACK GRID (pattern boxes), not a full-height
+ * clone of BeepBox's playhead. One short pink segment = one player on one channel.
+ * Color set in JS from BeepBox --playhead. Name top-left of THAT segment only.
+ * Same channel as you → ghost. Different channel → solid.
  */
 .sb-playhead-mark {
   position: fixed;
@@ -477,41 +477,47 @@ body {
   z-index: 99941;
   box-sizing: border-box;
   display: none;
+  /* height set in JS to exactly ONE channel row */
 }
 .sb-playhead-mark.sb-on { display: block; }
 .sb-playhead-mark .sb-ph-bar {
   position: absolute;
   left: 0;
   top: 0;
+  right: 0;
+  bottom: 0;
   width: 4px;
   height: 100%;
   border: none;
-  border-radius: 0;
-  /* BeepBox playhead is a solid 4px rect — color applied inline from theme */
+  border-radius: 1px;
   background: #ff4fd8;
-  box-shadow: none;
+  /* sit ON the playhead column but readable as a per-player tick */
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.85);
 }
 .sb-playhead-mark.same-ch .sb-ph-bar {
-  opacity: 0.3; /* ghost when both on same channel */
+  opacity: 0.28;
+  box-shadow: none;
 }
 .sb-playhead-mark.dim-ch .sb-ph-bar {
   opacity: 1;
 }
 .sb-playhead-mark .sb-ph-name {
   position: absolute;
-  left: 0;
-  top: 0;
-  transform: translate(0, calc(-100% - 1px));
-  padding: 0;
+  left: 6px; /* just right of the bar, top of the channel row */
+  top: 1px;
+  transform: none;
+  padding: 0 3px;
   margin: 0;
-  font: 800 11px/1.1 system-ui, -apple-system, "Segoe UI", sans-serif;
+  font: 800 10px/1.15 system-ui, -apple-system, "Segoe UI", sans-serif;
   color: #ff4fd8;
   white-space: nowrap;
-  max-width: 110px;
+  max-width: 90px;
   overflow: hidden;
   text-overflow: ellipsis;
   text-shadow: 0 0 4px #000, 0 1px 2px #000;
   pointer-events: none;
+  background: rgba(0,0,0,0.45);
+  border-radius: 2px;
 }
 .sb-playhead-mark.same-ch .sb-ph-name {
   opacity: 0.55;
@@ -1832,7 +1838,7 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
 
   // Native script load — Safari handles this much better than fetch+eval
   var s = document.createElement("script");
-  s.src = "chipbox-app.js?v=mp36";
+  s.src = "chipbox-app.js?v=mp37";
   s.async = false;
   s.onload = function () {
     setMsg("Engine loaded — starting…");
