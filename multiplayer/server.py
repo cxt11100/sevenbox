@@ -196,6 +196,22 @@ class Room:
         self.chat_log: list[dict[str, Any]] = []  # last messages for late joiners
         self.typing: dict[ServerConnection, float] = {}  # ws -> last typing time
         self._lobby_sig: str = ""  # playing|bpm|count — only rebroadcast list when this changes
+        self.frozen: bool = False  # host freeze: non-hosts view-only
+        self.track_owners: dict[int, str] = {}  # channel -> player name
+        self.jam_log: list[dict[str, Any]] = []  # short session tape
+        self._react_last: dict[ServerConnection, float] = {}
+
+    def add_jam(self, text: str, kind: str = "sys") -> dict[str, Any]:
+        entry = {
+            "sys": True,
+            "kind": kind,
+            "text": str(text)[:160],
+            "ts": int(time.time() * 1000),
+        }
+        self.jam_log.append(entry)
+        if len(self.jam_log) > 40:
+            self.jam_log = self.jam_log[-40:]
+        return entry
 
     def peer_list(self) -> list[dict[str, Any]]:
         out = []
@@ -218,6 +234,9 @@ class Room:
                 bar = int(p.get("bar", 0) or 0)
             except (TypeError, ValueError):
                 bar = 0
+            st = str(p.get("status") or "edit").lower()
+            if st not in ("edit", "listen", "afk"):
+                st = "edit"
             nm = self.names.get(c, "player")
             out.append(
                 {
@@ -228,12 +247,21 @@ class Room:
                     "x": x,
                     "y": y,
                     "inside": inside,
+                    "status": st,
                     "isHost": c is self.host,
                     # Only real "seven" (key-checked at join) can ever be true
                     "isOwner": is_seven_name(nm),
                 }
             )
         return out
+
+    def room_extras(self) -> dict[str, Any]:
+        return {
+            "frozen": bool(self.frozen),
+            "trackOwners": {str(k): v for k, v in self.track_owners.items()},
+            "jamLog": self.jam_log[-30:],
+            "sig": song_sig(self.song),
+        }
 
     def lobby_entry(self) -> dict[str, Any]:
         host_name = self.names.get(self.host, "host")
@@ -626,6 +654,7 @@ async def ws_handler(ws: ServerConnection) -> None:
                 room.presence[ws] = {
                     "channel": ch0,
                     "bar": bar0,
+                    "status": "edit",
                 }
                 if msg.get("song"):
                     song = str(msg["song"])
@@ -637,6 +666,8 @@ async def ws_handler(ws: ServerConnection) -> None:
                 room._lobby_sig = room.lobby_sig()
                 rooms[code] = room
                 client_room[ws] = code
+                room.add_jam(f"{name} hosted the room", "join")
+                extras = room.room_extras()
                 await send(
                     ws,
                     {
@@ -654,6 +685,7 @@ async def ws_handler(ws: ServerConnection) -> None:
                         "chat": room.chat_log[-30:],
                         "isOwner": is_seven_name(name),
                         "bpm": room.bpm,
+                        **extras,
                     },
                 )
                 await broadcast_lobby()
@@ -705,8 +737,11 @@ async def ws_handler(ws: ServerConnection) -> None:
                 room.presence[ws] = {
                     "channel": chj,
                     "bar": barj,
+                    "status": "edit",
                 }
                 client_room[ws] = code
+                room.add_jam(f"{name} joined", "join")
+                extras = room.room_extras()
                 await send(
                     ws,
                     {
@@ -725,6 +760,7 @@ async def ws_handler(ws: ServerConnection) -> None:
                         "ts": room.song_ts,
                         "chat": room.chat_log[-30:],
                         "isOwner": is_seven_name(name),
+                        **extras,
                     },
                 )
                 await broadcast_room(
@@ -737,6 +773,7 @@ async def ws_handler(ws: ServerConnection) -> None:
                         "host": room.names.get(room.host, "host"),
                         "title": room.title,
                         "public": room.public,
+                        "jamEvent": {"text": f"{name} joined", "kind": "join"},
                     },
                     skip=ws,
                 )
@@ -751,7 +788,7 @@ async def ws_handler(ws: ServerConnection) -> None:
                 if not room:
                     continue
                 role = room.roles.get(ws, "view")
-                if role == "view":
+                if role == "view" or (room.frozen and ws is not room.host):
                     await send(
                         ws,
                         {
@@ -760,6 +797,27 @@ async def ws_handler(ws: ServerConnection) -> None:
                             "from": "server",
                             "readonly": True,
                             "ts": room.song_ts,
+                            "frozen": room.frozen,
+                            "sig": song_sig(room.song),
+                        },
+                    )
+                    continue
+                # Soft track claim: non-host can't push edits while on a claimed foreign track
+                try:
+                    ch_edit = int(msg.get("channel") if msg.get("channel") is not None else -1)
+                except (TypeError, ValueError):
+                    ch_edit = -1
+                if (
+                    ch_edit >= 0
+                    and ws is not room.host
+                    and ch_edit in room.track_owners
+                    and room.track_owners[ch_edit] != room.names.get(ws)
+                ):
+                    await send(
+                        ws,
+                        {
+                            "type": "error",
+                            "message": f"Track {ch_edit} is claimed by {room.track_owners[ch_edit]}",
                         },
                     )
                     continue
@@ -800,7 +858,7 @@ async def ws_handler(ws: ServerConnection) -> None:
                 if not room:
                     continue
                 role = room.roles.get(ws, "view")
-                if role == "view":
+                if role == "view" or (room.frozen and ws is not room.host):
                     continue
                 restart = bool(msg.get("restart") or msg.get("snap"))
                 soft = bool(msg.get("soft"))
@@ -903,18 +961,124 @@ async def ws_handler(ws: ServerConnection) -> None:
                     bar = int(msg.get("bar") if msg.get("bar") is not None else 0)
                 except (TypeError, ValueError):
                     bar = 0
+                st = str(msg.get("status") or "edit").lower()
+                if st not in ("edit", "listen", "afk"):
+                    st = "edit"
                 room.presence[ws] = {
                     "channel": ch,
                     "bar": bar,
                     "x": float(msg["x"]) if msg.get("x") is not None else None,
                     "y": float(msg["y"]) if msg.get("y") is not None else None,
                     "inside": bool(msg.get("inside")),
+                    "status": st,
                 }
                 if msg.get("name"):
                     # only update display name if already in room (don't hijack)
                     if ws in room.names:
                         room.names[ws] = str(msg.get("name"))[:24]
                 schedule_presence_broadcast(room)
+
+            elif mtype == "freeze":
+                code = client_room.get(ws)
+                room = rooms.get(code) if code else None
+                if not room or room.host is not ws:
+                    await send(ws, {"type": "error", "message": "only host can freeze the song"})
+                    continue
+                room.frozen = bool(msg.get("frozen"))
+                who = room.names.get(ws, "host")
+                entry = room.add_jam(
+                    f"{who} {'froze' if room.frozen else 'unfroze'} the song",
+                    "freeze",
+                )
+                await broadcast_room(
+                    room,
+                    {
+                        "type": "freeze",
+                        "frozen": room.frozen,
+                        "from": who,
+                        "jamEvent": entry,
+                    },
+                )
+
+            elif mtype == "track_claim":
+                code = client_room.get(ws)
+                room = rooms.get(code) if code else None
+                if not room or ws not in room.clients:
+                    continue
+                try:
+                    ch = int(msg.get("channel") if msg.get("channel") is not None else 0)
+                except (TypeError, ValueError):
+                    ch = 0
+                if ch < 0:
+                    ch = 0
+                if ch > 64:
+                    ch = 64
+                who = room.names.get(ws, "player")
+                clear_all = bool(msg.get("clear"))
+                if clear_all:
+                    if room.host is not ws:
+                        await send(ws, {"type": "error", "message": "only host can clear claims"})
+                        continue
+                    room.track_owners.clear()
+                    entry = room.add_jam(f"{who} cleared track claims", "track")
+                else:
+                    release = bool(msg.get("release"))
+                    if release:
+                        if room.track_owners.get(ch) == who or room.host is ws:
+                            room.track_owners.pop(ch, None)
+                            entry = room.add_jam(f"{who} released track {ch}", "track")
+                        else:
+                            await send(ws, {"type": "error", "message": "not your claim"})
+                            continue
+                    else:
+                        # claim if free or re-claim own / host override
+                        cur = room.track_owners.get(ch)
+                        if cur and cur != who and room.host is not ws:
+                            await send(
+                                ws,
+                                {
+                                    "type": "error",
+                                    "message": f"Track {ch} already claimed by {cur}",
+                                },
+                            )
+                            continue
+                        room.track_owners[ch] = who
+                        entry = room.add_jam(f"{who} claimed track {ch}", "track")
+                await broadcast_room(
+                    room,
+                    {
+                        "type": "track_owners",
+                        "trackOwners": {str(k): v for k, v in room.track_owners.items()},
+                        "from": who,
+                        "jamEvent": entry,
+                    },
+                )
+
+            elif mtype == "react":
+                code = client_room.get(ws)
+                room = rooms.get(code) if code else None
+                if not room or ws not in room.clients:
+                    continue
+                now_r = time.time()
+                last_r = room._react_last.get(ws, 0)
+                if now_r - last_r < 0.8:
+                    continue
+                room._react_last[ws] = now_r
+                emoji = str(msg.get("emoji") or "👏")[:4]
+                if emoji not in ("👏", "🔥", "✨", "❤️", "💀", "🎵"):
+                    emoji = "👏"
+                who = room.names.get(ws, "player")
+                await broadcast_room(
+                    room,
+                    {
+                        "type": "react",
+                        "emoji": emoji,
+                        "from": who,
+                        "x": msg.get("x"),
+                        "y": msg.get("y"),
+                    },
+                    # include sender so they see their own fly
+                )
 
             elif mtype == "chat":
                 code = client_room.get(ws)

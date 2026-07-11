@@ -897,6 +897,158 @@ body {
   outline: 2px dashed rgba(122,231,255,0.35);
   outline-offset: -2px;
 }
+/* Frozen room (host lock) */
+#beepboxEditorContainer.sb-mp-frozen.sb-mp-hardlock::after {
+  content: "Song frozen by host — listen + chat + cursors only.";
+  color: #ffd76d;
+  border-color: rgba(255,215,109,0.4);
+  background: rgba(30, 22, 8, 0.8);
+}
+/* Jam tools row */
+.sb-jam-tools {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid #1c1c1c;
+}
+.sb-jam-tools select,
+.sb-jam-tools button {
+  font-size: 11px !important;
+  padding: 5px 8px !important;
+}
+.sb-jam-tools .sb-hash-badge {
+  font: 700 10px/1.2 ui-monospace, monospace;
+  color: #666;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid #2a2a2a;
+  background: #0e0e0e;
+}
+.sb-jam-tools .sb-hash-badge.ok { color: #6dffa8; border-color: rgba(109,255,168,0.35); }
+.sb-jam-tools .sb-hash-badge.bad { color: #ff8a8a; border-color: rgba(255,100,100,0.35); }
+.sb-jam-tools .sb-hash-badge.idle { color: #555; }
+#sb-mp-jamlog {
+  width: 100%;
+  max-height: 90px;
+  overflow-y: auto;
+  margin-top: 4px;
+  padding: 6px 8px;
+  border: 1px solid #222;
+  border-radius: 6px;
+  background: #080808;
+  font: 11px/1.35 ui-monospace, monospace;
+  color: #777;
+  display: none;
+}
+#sb-mp-jamlog.sb-show { display: block; }
+#sb-mp-jamlog div { margin: 0 0 2px; }
+#sb-mp-qr-pop {
+  display: none;
+  position: fixed;
+  z-index: 99950;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: #111;
+  border: 1px solid #444;
+  border-radius: 12px;
+  padding: 14px;
+  text-align: center;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+}
+#sb-mp-qr-pop.sb-show { display: block; }
+#sb-mp-qr-pop img { width: 160px; height: 160px; background: #fff; border-radius: 6px; }
+#sb-mp-qr-pop p { margin: 8px 0 0; font-size: 11px; color: #888; max-width: 200px; word-break: break-all; }
+#sb-mp-qr-pop button { margin-top: 10px; }
+#sb-toast-stack {
+  position: fixed;
+  right: 12px;
+  bottom: 14px;
+  z-index: 99955;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+  max-width: min(280px, 90vw);
+}
+.sb-toast {
+  background: rgba(18,18,22,0.94);
+  border: 1px solid #3a3a3a;
+  color: #ddd;
+  font: 600 12px/1.3 system-ui, sans-serif;
+  padding: 8px 12px;
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+  animation: sbToastIn 0.2s ease;
+}
+.sb-toast.edit { border-color: rgba(109,255,168,0.4); color: #c8ffe0; }
+.sb-toast.react { border-color: rgba(255,94,200,0.45); }
+@keyframes sbToastIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.sb-react-fly {
+  position: fixed;
+  z-index: 99948;
+  pointer-events: none;
+  font-size: 28px;
+  animation: sbReactFly 1.1s ease-out forwards;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+}
+@keyframes sbReactFly {
+  0% { opacity: 1; transform: translate(-50%, 0) scale(0.6); }
+  40% { opacity: 1; transform: translate(-50%, -28px) scale(1.15); }
+  100% { opacity: 0; transform: translate(-50%, -70px) scale(1); }
+}
+/* Update board */
+.sb-updates {
+  margin-top: 18px;
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  background: #0c0c0c;
+  overflow: hidden;
+}
+.sb-updates summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 12px 14px;
+  font: 700 12px/1 system-ui, sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #aaa;
+  background: #111;
+  border-bottom: 1px solid #222;
+  user-select: none;
+}
+.sb-updates summary::-webkit-details-marker { display: none; }
+.sb-updates summary::after {
+  content: " +";
+  color: #6dffa8;
+  float: right;
+}
+.sb-updates[open] summary::after { content: " −"; }
+.sb-updates-body { padding: 10px 14px 14px; }
+.sb-update-item {
+  padding: 10px 0;
+  border-bottom: 1px solid #1a1a1a;
+}
+.sb-update-item:last-child { border-bottom: none; }
+.sb-update-item .when {
+  font: 700 10px/1 ui-monospace, monospace;
+  color: #6dffa8;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+.sb-update-item .what {
+  font-size: 13px;
+  color: #ccc;
+  line-height: 1.4;
+}
+.sb-update-item .what strong { color: #eee; }
 .sb-mp-banner {
   width: 100%;
   font-size: 11px;
@@ -1668,6 +1820,29 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
         <span class="sb-mp-status" id="sb-mp-status"><span class="sb-mp-dot"></span>Online host — host a room or join by list/code</span>
         <div class="sb-mp-banner" id="sb-mp-banner">Same link for everyone. Host or join by list/code. Song + play/stop sync. Blank title = random name. Free host may take ~30–60s to wake.</div>
         <div id="sb-mp-peers"></div>
+        <div class="sb-jam-tools" id="sb-jam-tools" title="Room jam tools">
+          <select id="sb-mp-status" title="Your jam status">
+            <option value="edit">✏️ Editing</option>
+            <option value="listen">🎧 Listening</option>
+            <option value="afk">💤 AFK</option>
+          </select>
+          <select id="sb-mp-follow" title="Spectator follow — match their track">
+            <option value="">Follow: off</option>
+          </select>
+          <button type="button" id="sb-mp-freeze" title="Host: freeze song edits (chat/cursors stay)">Freeze</button>
+          <button type="button" id="sb-mp-react-clap" title="React">👏</button>
+          <button type="button" id="sb-mp-react-fire" title="React">🔥</button>
+          <button type="button" id="sb-mp-react-spark" title="React">✨</button>
+          <button type="button" id="sb-mp-qr" title="Show room QR for friends nearby">QR invite</button>
+          <button type="button" id="sb-mp-jamlog-toggle" title="Session jam tape">Jam tape</button>
+          <span class="sb-hash-badge idle" id="sb-mp-hash" title="Song sync hash">hash —</span>
+          <select id="sb-mp-track-owner" title="Host: who owns current track claim display">
+            <option value="">Track claim: free</option>
+          </select>
+          <button type="button" id="sb-mp-track-claim" title="Claim your current track">Claim track</button>
+          <button type="button" id="sb-mp-track-clear" title="Host: clear all track claims">Clear claims</button>
+        </div>
+        <div id="sb-mp-jamlog" aria-label="Jam session log"></div>
         <div id="sb-mp-chat" aria-label="Room chat">
           <div class="sb-chat-head">
             <span>Room chat</span>
@@ -1721,7 +1896,49 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
           Use <strong>Share invite</strong> to copy a link with the room code for friends.
           Everyone edits the same song in the browser. No install and no same Wi‑Fi required.
         </p>
+        <p style="color:#888;font-size:13px;margin-top:8px">
+          Jam tools: status (edit/listen/AFK), spectator follow, host freeze, track claims,
+          reactions, QR invite, jam tape log, and song-hash sync badge.
+        </p>
       </section>
+
+      <details class="sb-updates" id="sb-updates" open>
+        <summary>Update board</summary>
+        <div class="sb-updates-body">
+          <div class="sb-update-item">
+            <div class="when">2026-07-11 · mp50</div>
+            <div class="what">
+              <strong>Jam tools + update board.</strong>
+              Status, follow, freeze, track claims, reactions, QR invite, jam tape, song hash badge.
+              Version label is now <strong>sevebox 4.2.2</strong>.
+            </div>
+          </div>
+          <div class="sb-update-item">
+            <div class="when">2026-07-11 · mp49</div>
+            <div class="what">
+              <strong>Tighter playhead timing</strong> — lag-compensated play start, soft mid-play align, faster play/stop.
+            </div>
+          </div>
+          <div class="sb-update-item">
+            <div class="when">2026-07-11 · mp48</div>
+            <div class="what">
+              <strong>Smoother multipplayer cursors</strong> — chase follow instead of jump/coast.
+            </div>
+          </div>
+          <div class="sb-update-item">
+            <div class="when">2026-07-11 · mp47</div>
+            <div class="what">
+              <strong>Public rooms list</strong> — simpler rows; your server shows <em>You're here</em> (can't rejoin own room).
+            </div>
+          </div>
+          <div class="sb-update-item">
+            <div class="when">Earlier</div>
+            <div class="what">
+              Lobby playing/BPM, room chat + typing, OWNER vault, site themes, invite links, free permanent host.
+            </div>
+          </div>
+        </div>
+      </details>
     </div>
   </main>
 
@@ -1731,10 +1948,16 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
         <strong>SevenBox</strong> — free online chiptune editor with multiplayer rooms.
       </div>
       <div class="sb-credits">
-        <span>sevenbox</span>
+        <span>sevebox 4.2.2 · sevenbox</span>
       </div>
     </div>
   </footer>
+</div>
+<div id="sb-toast-stack" aria-live="polite"></div>
+<div id="sb-mp-qr-pop" role="dialog" aria-label="Room QR">
+  <img id="sb-mp-qr-img" alt="Room QR code" width="160" height="160" />
+  <p id="sb-mp-qr-text"></p>
+  <button type="button" id="sb-mp-qr-close">Close</button>
 </div>
 
 <!-- Floating owner panel: only appears for name "seven" -->
@@ -1834,7 +2057,7 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
 
   // Native script load — Safari handles this much better than fetch+eval
   var s = document.createElement("script");
-  s.src = "chipbox-app.js?v=mp49";
+  s.src = "chipbox-app.js?v=mp50";
   s.async = false;
   s.onload = function () {
     setMsg("Engine loaded — starting…");
