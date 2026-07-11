@@ -667,6 +667,7 @@ async def leave(ws: ServerConnection) -> None:
     room = rooms.get(code)
     if not room:
         return
+    left_name = room.names.get(ws, "Someone")
     room.clients.discard(ws)
     room.names.pop(ws, None)
     room.roles.pop(ws, None)
@@ -685,6 +686,18 @@ async def leave(ws: ServerConnection) -> None:
         room.roles[room.host] = "host"
         promoted = room.host
 
+    # Temporary system notice for remaining players (not stored in chat history)
+    await broadcast_room(
+        room,
+        {
+            "type": "sys",
+            "sys": True,
+            "temporary": True,
+            "kind": "leave",
+            "text": f"{left_name} left the room",
+            "ts": int(time.time() * 1000),
+        },
+    )
     await broadcast_room(
         room,
         {
@@ -695,6 +708,7 @@ async def leave(ws: ServerConnection) -> None:
             "host": room.names.get(room.host, "host"),
             "title": room.title,
             "public": room.public,
+            "jamEvent": {"text": f"{left_name} left", "kind": "leave"},
         },
     )
     try:
@@ -935,6 +949,19 @@ async def ws_handler(ws: ServerConnection) -> None:
                         "isOwner": is_seven_name(name),
                         **extras,
                     },
+                )
+                # Temporary system notice for everyone else in the room
+                await broadcast_room(
+                    room,
+                    {
+                        "type": "sys",
+                        "sys": True,
+                        "temporary": True,
+                        "kind": "join",
+                        "text": f"{name} joined the room",
+                        "ts": int(time.time() * 1000),
+                    },
+                    skip=ws,
                 )
                 await broadcast_room(
                     room,
