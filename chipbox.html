@@ -548,12 +548,12 @@ body {
 .sb-playhead-mark.is-solid .sb-ph-bar {
   opacity: 1;
 }
-/* name sits at the other player's track height, left of the line */
+/* name at other player's track height, beside the line (not on top of pattern cells) */
 .sb-playhead-mark .sb-ph-name {
   position: absolute;
-  left: 6px;
-  /* top set in JS to channel offset within the full-height bar */
-  top: 0;
+  right: 6px;
+  left: auto;
+  top: 0; /* set in JS as offset down the full-height bar */
   transform: translateY(-50%);
   padding: 1px 5px;
   margin: 0;
