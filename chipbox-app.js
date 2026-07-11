@@ -2499,6 +2499,31 @@ try {
     if (chatLog) chatLog.innerHTML = "";
   }
 
+  // Dedupe join/leave so peers jamEvent + sys packet don't double-fire
+  var lastPresenceAnnounce = "";
+  var lastPresenceAnnounceAt = 0;
+
+  function announcePresence(text, kind) {
+    text = String(text || "").trim();
+    if (!text) return;
+    var now = Date.now();
+    if (text === lastPresenceAnnounce && now - lastPresenceAnnounceAt < 1500) return;
+    lastPresenceAnnounce = text;
+    lastPresenceAnnounceAt = now;
+    // Ensure chat is open so the notice is visible
+    setChatOpen(true);
+    appendChatLine({
+      type: "sys",
+      sys: true,
+      temporary: true,
+      kind: kind || "",
+      text: text
+    });
+    showToast(text, kind === "leave" ? "err" : "edit");
+    // Also flash status line briefly
+    setStatus(escapeHtml(text), "on");
+  }
+
   function appendChatLine(msg) {
     if (!chatLog || !msg) return;
     var line = document.createElement("div");
@@ -3307,17 +3332,9 @@ try {
         lastSongSig = msg.sig;
         updateHashBadge(msg.sig, false);
       }
-      if (msg.from && msg.from !== "server" && !namesMatch(msg.from, getName())) {
-        if (msg.from !== lastRemoteEditFrom || Date.now() - (window._sbLastEditToast || 0) > 2500) {
-          lastRemoteEditFrom = msg.from;
-          window._sbLastEditToast = Date.now();
-          showToast(
-            msg.queuePlay
-              ? (msg.from + " played queued \"" + (msg.queueTitle || "song") + "\"")
-              : (msg.from + " edited the song"),
-            "edit"
-          );
-        }
+      // Note edits: no toast spam. Only announce rare queue-play loads.
+      if (msg.queuePlay && msg.from && !namesMatch(msg.from, getName())) {
+        showToast(msg.from + " played queued \"" + (msg.queueTitle || "song") + "\"", "edit");
       }
       if (msg.frozen != null) {
         roomFrozen = !!msg.frozen;
@@ -3345,7 +3362,14 @@ try {
         renderPeers(msg.peers, { forceChips: true });
       }
       if (msg.title) roomTitle = msg.title;
-      if (msg.jamEvent && msg.jamEvent.text) appendJamLine(msg.jamEvent.text);
+      if (msg.jamEvent && msg.jamEvent.text) {
+        appendJamLine(msg.jamEvent.text);
+        // Fallback join/leave notice if dedicated sys packet was missed
+        var jk = msg.jamEvent.kind || "";
+        if (jk === "join" || jk === "leave") {
+          announcePresence(msg.jamEvent.text, jk);
+        }
+      }
       if (msg.host && bannerEl && room && !isHost) {
         bannerEl.textContent = "In \"" + (roomTitle || room) + "\" as " + myRole + ". Host: " + msg.host + ".";
       }
