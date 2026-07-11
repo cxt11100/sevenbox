@@ -1856,7 +1856,7 @@ async def process_request(connection: ServerConnection, request: Request) -> Res
             {
                 "ok": True,
                 "app": "SevenBox",
-                "v": 7,
+                "v": 8, "createFix": True,
                 "online": st["online"],
                 "inRooms": st["inRooms"],
                 "rooms": st["rooms"],
