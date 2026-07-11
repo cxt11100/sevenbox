@@ -2056,7 +2056,7 @@ try {
   }
 
   function renderLobby(servers) {
-    lobbyServers = servers || [];
+    if (servers) lobbyServers = servers;
     if (!lobbyList) return;
     lobbyList.innerHTML = "";
     if (!lobbyServers.length) {
@@ -2064,19 +2064,17 @@ try {
       return;
     }
     var myRoom = room ? String(room).toUpperCase() : "";
-    var myName = getName();
     for (var i = 0; i < lobbyServers.length; i++) {
       (function (srv) {
         var code = String(srv.code || "").toUpperCase();
+        // Only the room you're currently in — never show Join for it
         var isMine = !!(myRoom && code && code === myRoom);
-        // also treat as yours if you're the host name and still connected to that room
-        if (!isMine && myRoom && srv.host && namesMatch(srv.host, myName) && isHost) {
-          isMine = code === myRoom;
-        }
-        var bpm = (srv.bpm != null && !isNaN(+srv.bpm)) ? (+srv.bpm | 0) : 150;
-        if (bpm < 30) bpm = 30;
-        if (bpm > 500) bpm = 500;
         var n = srv.count || 1;
+        var bpm = (srv.bpm != null && !isNaN(+srv.bpm)) ? (+srv.bpm | 0) : null;
+        if (bpm != null) {
+          if (bpm < 30) bpm = 30;
+          if (bpm > 500) bpm = 500;
+        }
 
         var row = document.createElement("div");
         row.className = "sb-srv" + (isMine ? " is-mine" : "");
@@ -2084,33 +2082,23 @@ try {
         var hostBit = escapeHtml(srv.host || "?");
         if (srv.hostIsOwner) hostBit = '<span class="sb-owner-tag">' + hostBit + "</span>";
 
+        var metaParts = [hostBit, escapeHtml(code || "?"), n + (n === 1 ? " online" : " online")];
+        if (bpm != null) metaParts.push(bpm + " bpm");
+        if (srv.playing) metaParts.push("playing");
+
         var main = document.createElement("div");
         main.className = "sb-srv-main";
         main.innerHTML =
-          '<div class="sb-srv-title">' + escapeHtml(srv.title || "jam") +
-            (isMine ? ' <span style="color:#6dffa8;font-weight:700;font-size:11px">· you</span>' : "") +
-          "</div>" +
-          '<div class="sb-srv-meta">' + hostBit + " · " + escapeHtml(code || "?") + "</div>";
-
-        var bits = document.createElement("div");
-        bits.className = "sb-srv-bits";
-        bits.innerHTML =
-          '<span class="' + (srv.playing ? "dot-play" : "dot-stop") + '" title="' +
-            (srv.playing ? "Playing" : "Stopped") + '">' +
-            (srv.playing ? "▶" : "■") +
-          "</span>" +
-          "<span>" + bpm + "</span>" +
-          "<span>·</span>" +
-          "<span>" + n + "</span>";
+          '<div class="sb-srv-title">' + escapeHtml(srv.title || "jam") + "</div>" +
+          '<div class="sb-srv-meta">' + metaParts.join(" · ") + "</div>";
 
         row.appendChild(main);
-        row.appendChild(bits);
 
         if (isMine) {
           var here = document.createElement("div");
           here.className = "sb-srv-here";
-          here.textContent = "In room";
-          here.title = "You're already in this server — leave first to join another";
+          here.textContent = "You're here";
+          here.title = "This is your current server — leave first to join another";
           row.appendChild(here);
         } else {
           var btn = document.createElement("button");
@@ -2118,7 +2106,8 @@ try {
           btn.textContent = "Join";
           btn.addEventListener("click", function () {
             if (room && String(room).toUpperCase() === code) {
-              setStatus("You're already in this room", "on");
+              setStatus("You're already in this server", "on");
+              renderLobby();
               return;
             }
             if (!requireName()) return;
@@ -2533,6 +2522,7 @@ try {
       renderPeers([]);
       setSyncPill(false);
       setStatus("Kicked: " + (msg.reason || "removed"), "err");
+      renderLobby();
       return;
     }
     if (msg.type === "hello") {
@@ -2586,6 +2576,8 @@ try {
       startLoops();
       setSyncPill(true, false, "Live sync — keep this tab open");
       resumeAllAudio();
+      // refresh list so your room shows "You're here" (no Join) immediately
+      renderLobby();
       // only blast transport on join if play state actually needs sharing — never force bar 0
       setTimeout(function () {
         sendState(true);
@@ -2914,8 +2906,9 @@ try {
     }
     // Re-joining your current room used to leave+rejoin and break host/create state
     if (room && String(room).toUpperCase() === code) {
-      setStatus("You're already in this room — leave first to switch", "on");
+      setStatus("You're already in this server — leave first to switch", "on");
       if (codeEl) codeEl.value = code;
+      renderLobby();
       return;
     }
     if (!requireName()) return;
@@ -3023,6 +3016,8 @@ try {
     typingActive = false;
     setStatus("Left room — still online", "");
     setSyncPill(false);
+    // your old room can show Join again for others; refresh so is-mine clears
+    renderLobby();
     try {
       var lu = new URL(location.href);
       lu.searchParams.delete("room");
