@@ -807,21 +807,32 @@ try {
     var gateKey = document.getElementById("sb-gate-key");
     var saved = "";
     try { saved = localStorage.getItem(NAME_KEY) || ""; } catch (e) {}
-    // Only auto-pass gate if saved name matches nickname+digits (or will re-prompt)
+
+    // Never pre-fill junk in the box (old names like seven22222222). Empty box only.
+    function clearNameInputs() {
+      if (gateInput) gateInput.value = "";
+      if (nameEl) nameEl.value = "";
+      if (gateKey) gateKey.value = "";
+      toggleGateKey(false);
+    }
+
+    // Only auto-enter if saved name is still valid format
     if (saved && !nameLooksLikeSeven(saved) && validateName(saved, "").ok) {
       setName(saved);
       if (gate) gate.classList.add("sb-hide");
-    } else if (saved && nameLooksLikeSeven(saved)) {
-      try { localStorage.removeItem(NAME_KEY); } catch (e) {}
+    } else {
+      // Drop invalid / reserved saved names so they never reappear in the inputs
+      if (saved) {
+        try { localStorage.removeItem(NAME_KEY); } catch (e0) {}
+      }
+      clearNameInputs();
       if (gate) gate.classList.remove("sb-hide");
-      if (gateInput) gateInput.value = "seven";
-      toggleGateKey(true);
-      showGateErr("Name \"seven\" needs the special key.");
-    } else if (gate) {
-      gate.classList.remove("sb-hide");
-      if (saved && !nameLooksLikeSeven(saved) && !validateName(saved, "").ok) {
-        if (gateInput) gateInput.value = saved;
-        showGateErr("Add 3–5 numbers to your nickname (e.g. " + (saved.replace(/\s+/g, "") || "you") + "482).");
+      if (saved && nameLooksLikeSeven(saved)) {
+        showGateErr("Name \"seven\" is reserved and needs a special key. Type a normal name like jam482 instead.");
+      } else if (saved) {
+        showGateErr("Your old name wasn't valid. Type a nickname + 3–5 numbers (example format: jam482). Box is empty — type a new one.");
+      } else {
+        showGateErr("");
       }
     }
     function syncGo() {
@@ -831,12 +842,24 @@ try {
       if (nameLooksLikeSeven(n)) toggleGateKey(true); else toggleGateKey(false);
     }
     if (gateInput) {
+      // Force empty on open so browser autofill / old values don't stick
+      if (!gate || !gate.classList.contains("sb-hide")) {
+        gateInput.value = "";
+      }
       gateInput.addEventListener("input", syncGo);
       gateInput.addEventListener("keydown", function (e) {
         if (e.key === "Enter" && gateGo && !gateGo.disabled) gateGo.click();
       });
       syncGo();
-      setTimeout(function () { try { gateInput.focus(); } catch (e) {} }, 300);
+      setTimeout(function () {
+        try {
+          if (gate && !gate.classList.contains("sb-hide")) {
+            gateInput.value = "";
+            gateInput.focus();
+            syncGo();
+          }
+        } catch (e) {}
+      }, 300);
     }
     if (gateKey) {
       gateKey.addEventListener("keydown", function (e) {
