@@ -876,17 +876,86 @@ body {
   border-color: rgba(255,215,109,0.4);
   background: rgba(30, 22, 8, 0.8);
 }
-/* Jam tools row */
-.sb-jam-tools {
+/* Extra room tools — numbered groups + plain English */
+.sb-jam-panel .sb-tool-intro {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: #888;
+  line-height: 1.4;
+}
+.sb-tool-block {
   width: 100%;
+  margin: 0 0 12px;
+  padding: 10px 10px 8px;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  background: #0c0c0c;
+  box-sizing: border-box;
+}
+.sb-tool-head {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-  margin-top: 4px;
-  padding-top: 6px;
-  border-top: 1px solid #1c1c1c;
+  align-items: baseline;
+  gap: 6px 10px;
+  margin: 0 0 6px;
 }
+.sb-tool-head strong {
+  font-size: 13px;
+  color: #eee;
+  font-weight: 700;
+}
+.sb-tool-head span {
+  font-size: 11px;
+  color: #666;
+}
+.sb-tool-help {
+  margin: 0 0 8px;
+  font-size: 11px;
+  color: #777;
+  line-height: 1.35;
+}
+.sb-tool-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: #888;
+  min-width: 120px;
+  flex: 1 1 140px;
+}
+.sb-tool-label select {
+  font-size: 12px !important;
+  padding: 6px 8px !important;
+  min-height: 32px;
+  background: #111;
+  border: 1px solid #444;
+  border-radius: 6px;
+  color: #eee;
+}
+.sb-tool-hint {
+  font-size: 11px;
+  color: #666;
+  align-self: center;
+}
+.sb-tool-block .sb-mp-row { margin-bottom: 6px; }
+.sb-tool-block .sb-mp-row:last-child { margin-bottom: 0; }
+.sb-tool-block button {
+  font-size: 12px !important;
+  padding: 6px 10px !important;
+  min-height: 32px;
+}
+.sb-hash-badge {
+  font: 700 10px/1.2 ui-monospace, monospace;
+  color: #666;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid #2a2a2a;
+  background: #0e0e0e;
+  align-self: center;
+}
+.sb-hash-badge.ok { color: #6dffa8; border-color: rgba(109,255,168,0.35); }
+.sb-hash-badge.bad { color: #ff8a8a; border-color: rgba(255,100,100,0.35); }
+.sb-hash-badge.idle { color: #555; }
 .sb-queue-list {
   width: 100%;
   max-height: 120px;
@@ -934,22 +1003,13 @@ body {
   border-color: transparent transparent transparent #88aaff;
   filter: drop-shadow(0 0 2px #000);
 }
-.sb-jam-tools select,
-.sb-jam-tools button {
-  font-size: 11px !important;
-  padding: 5px 8px !important;
+.sb-jam-tools {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
 }
-.sb-jam-tools .sb-hash-badge {
-  font: 700 10px/1.2 ui-monospace, monospace;
-  color: #666;
-  padding: 4px 8px;
-  border-radius: 6px;
-  border: 1px solid #2a2a2a;
-  background: #0e0e0e;
-}
-.sb-jam-tools .sb-hash-badge.ok { color: #6dffa8; border-color: rgba(109,255,168,0.35); }
-.sb-jam-tools .sb-hash-badge.bad { color: #ff8a8a; border-color: rgba(255,100,100,0.35); }
-.sb-jam-tools .sb-hash-badge.idle { color: #555; }
 #sb-mp-jamlog {
   width: 100%;
   max-height: 90px;
@@ -1997,62 +2057,123 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
               <button type="submit" id="sb-mp-chat-send" disabled>Send</button>
             </form>
           </div>
-          <details class="sb-mp-more" style="margin-top:8px">
-            <summary>Jam tools</summary>
+          <details class="sb-mp-more sb-jam-panel" style="margin-top:8px">
+            <summary>Extra room tools</summary>
             <div class="sb-mp-more-body">
-              <div class="sb-jam-tools" id="sb-jam-tools" title="Room jam tools">
-                <select id="sb-mp-status" title="Your jam status">
-                  <option value="edit">✏️ Editing</option>
-                  <option value="listen">🎧 Listening</option>
-                  <option value="afk">💤 AFK</option>
-                </select>
-                <select id="sb-mp-follow" title="Spectator follow — match their track">
-                  <option value="">Follow: off</option>
-                </select>
-                <button type="button" id="sb-mp-freeze" title="Host: freeze song edits (chat/cursors stay)">Freeze</button>
-                <button type="button" id="sb-mp-react-clap" title="React">👏</button>
-                <button type="button" id="sb-mp-react-fire" title="React">🔥</button>
-                <button type="button" id="sb-mp-react-spark" title="React">✨</button>
-                <button type="button" id="sb-mp-qr" title="Show room QR for friends nearby">QR invite</button>
-                <button type="button" id="sb-mp-jamlog-toggle" title="Session jam tape">Jam tape</button>
-                <span class="sb-hash-badge idle" id="sb-mp-hash" title="Song sync hash">hash —</span>
-                <select id="sb-mp-track-owner" title="Track claims">
-                  <option value="">Track claims: free</option>
-                </select>
-                <button type="button" id="sb-mp-track-claim" title="Claim ownership of your current track">Own track</button>
-                <button type="button" id="sb-mp-track-clear" title="Host: clear all track ownership">Clear ownership</button>
-                <button type="button" id="sb-mp-apply-role-inroom" title="Host: apply joiner permission to everyone">Apply perms</button>
+              <p class="sb-tool-intro">Optional tools while you’re in a room. You don’t need these to jam — create, join, chat, and play still work above.</p>
+
+              <div class="sb-tool-block" id="sb-jam-tools">
+                <div class="sb-tool-head">
+                  <strong>1. You</strong>
+                  <span>How you look to others</span>
+                </div>
+                <div class="sb-mp-row">
+                  <label class="sb-tool-label">My status
+                    <select id="sb-mp-status" title="Shown on your player chip">
+                      <option value="edit">Editing (placing notes)</option>
+                      <option value="listen">Listening only</option>
+                      <option value="afk">Away / AFK</option>
+                    </select>
+                  </label>
+                  <label class="sb-tool-label">Watch someone’s track
+                    <select id="sb-mp-follow" title="Jump to the same track as them">
+                      <option value="">Off</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="sb-mp-row">
+                  <span class="sb-tool-hint">React:</span>
+                  <button type="button" id="sb-mp-react-clap" title="Send clap">👏 Clap</button>
+                  <button type="button" id="sb-mp-react-fire" title="Send fire">🔥 Fire</button>
+                  <button type="button" id="sb-mp-react-spark" title="Send sparkles">✨ Nice</button>
+                </div>
               </div>
-              <div class="sb-mp-section-label" style="margin-top:8px">Song queue</div>
-              <div class="sb-mp-row">
-                <button type="button" id="sb-mp-queue-add" title="Add current song to room queue">Queue this song</button>
-                <button type="button" id="sb-mp-queue-play" title="Host: play top-voted song">Play top vote</button>
-                <button type="button" id="sb-mp-queue-clear" title="Host: clear queue">Clear queue</button>
+
+              <div class="sb-tool-block">
+                <div class="sb-tool-head">
+                  <strong>2. Invite friends</strong>
+                  <span>Share the room easily</span>
+                </div>
+                <div class="sb-mp-row">
+                  <button type="button" id="sb-mp-qr" title="Show a QR code of the invite link">Show QR code</button>
+                  <button type="button" id="sb-mp-lan" title="Links for friends on the same Wi‑Fi">Same Wi‑Fi links</button>
+                  <button type="button" id="sb-mp-jamlog-toggle" title="Show who joined / froze / claimed">Activity log</button>
+                  <span class="sb-hash-badge idle" id="sb-mp-hash" title="Song sync check — match means you’re in sync">sync —</span>
+                </div>
+                <div id="sb-mp-lan-box" class="sb-lan-box" style="display:none"></div>
+                <div id="sb-mp-jamlog" aria-label="Activity log"></div>
               </div>
-              <div id="sb-mp-queue-list" class="sb-queue-list"><div class="sb-srv-empty">Queue empty</div></div>
-              <div class="sb-mp-section-label" style="margin-top:8px">Moderation</div>
-              <div class="sb-mp-row">
-                <select id="sb-mp-mod-target" title="Player"><option value="">— player —</option></select>
-                <button type="button" id="sb-mp-mod-mute">Mute</button>
-                <button type="button" id="sb-mp-mod-unmute">Unmute</button>
-                <button type="button" id="sb-mp-mod-timeout" title="2 min timeout">Timeout 2m</button>
-                <button type="button" id="sb-mp-mod-report">Report</button>
+
+              <div class="sb-tool-block">
+                <div class="sb-tool-head">
+                  <strong>3. Tracks</strong>
+                  <span>Own a track so others don’t overwrite it</span>
+                </div>
+                <p class="sb-tool-help">Select a track in the editor, then claim it. Host can clear all claims.</p>
+                <div class="sb-mp-row">
+                  <select id="sb-mp-track-owner" title="Who owns which tracks">
+                    <option value="">No tracks claimed yet</option>
+                  </select>
+                  <button type="button" id="sb-mp-track-claim" title="Claim the track you’re on">Claim my track</button>
+                  <button type="button" id="sb-mp-track-clear" title="Host only: free all tracks">Clear all claims</button>
+                </div>
               </div>
-              <div class="sb-mp-section-label" style="margin-top:8px">Ghost replay · LAN · Theme</div>
-              <div class="sb-mp-row">
-                <button type="button" id="sb-mp-ghost-play" title="Replay recent room movement as ghosts">Play ghost jam</button>
-                <button type="button" id="sb-mp-ghost-stop">Stop ghosts</button>
-                <button type="button" id="sb-mp-lan" title="Show same-Wi‑Fi links">LAN party</button>
-                <select id="sb-mp-editor-theme" title="Editor look (BeepBox themes)">
-                  <option value="">Editor theme…</option>
-                  <option value="dark classic">dark classic</option>
-                  <option value="dark competition">dark competition</option>
-                  <option value="light classic">light classic</option>
-                  <option value="light competition">light competition</option>
-                </select>
+
+              <div class="sb-tool-block">
+                <div class="sb-tool-head">
+                  <strong>4. Song playlist</strong>
+                  <span>Queue songs, vote, host plays one</span>
+                </div>
+                <p class="sb-tool-help">Add the song you’re working on. Everyone votes. Host plays the winner.</p>
+                <div class="sb-mp-row">
+                  <button type="button" id="sb-mp-queue-add" title="Put current song in the playlist">Add current song</button>
+                  <button type="button" id="sb-mp-queue-play" title="Host only: load the song with the most votes">Host: play winner</button>
+                  <button type="button" id="sb-mp-queue-clear" title="Host only: empty the playlist">Host: clear list</button>
+                </div>
+                <div id="sb-mp-queue-list" class="sb-queue-list"><div class="sb-srv-empty">No songs in playlist yet</div></div>
               </div>
-              <div id="sb-mp-lan-box" class="sb-lan-box" style="display:none"></div>
-              <div id="sb-mp-jamlog" aria-label="Jam session log"></div>
+
+              <div class="sb-tool-block">
+                <div class="sb-tool-head">
+                  <strong>5. Host controls</strong>
+                  <span>Only the room host / owner</span>
+                </div>
+                <p class="sb-tool-help">Lock editing, set joiner perms, or quiet someone who is disruptive.</p>
+                <div class="sb-mp-row">
+                  <button type="button" id="sb-mp-freeze" title="Stop non-hosts from editing notes">Lock song edits</button>
+                  <button type="button" id="sb-mp-apply-role-inroom" title="Apply joiner permission to everyone">Apply join permissions</button>
+                </div>
+                <div class="sb-mp-row">
+                  <label class="sb-tool-label">Player
+                    <select id="sb-mp-mod-target" title="Who to moderate"><option value="">Choose player…</option></select>
+                  </label>
+                  <button type="button" id="sb-mp-mod-mute" title="Block their chat">Mute chat</button>
+                  <button type="button" id="sb-mp-mod-unmute" title="Allow their chat again">Unmute</button>
+                  <button type="button" id="sb-mp-mod-timeout" title="Block edit/chat for 2 minutes">Timeout 2 min</button>
+                  <button type="button" id="sb-mp-mod-report" title="Send a report to the host">Report</button>
+                </div>
+              </div>
+
+              <div class="sb-tool-block">
+                <div class="sb-tool-head">
+                  <strong>6. Fun / look</strong>
+                  <span>Replay movement · editor colors</span>
+                </div>
+                <p class="sb-tool-help">Ghost jam replays recent cursor movement (not a full video). Theme changes the editor colors.</p>
+                <div class="sb-mp-row">
+                  <button type="button" id="sb-mp-ghost-play" title="Replay recent mouse movement in the room">Replay ghosts</button>
+                  <button type="button" id="sb-mp-ghost-stop">Stop replay</button>
+                  <label class="sb-tool-label">Editor colors
+                    <select id="sb-mp-editor-theme" title="BeepBox editor theme">
+                      <option value="">Choose theme…</option>
+                      <option value="dark classic">Dark classic</option>
+                      <option value="dark competition">Dark competition</option>
+                      <option value="light classic">Light classic</option>
+                      <option value="light competition">Light competition</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
             </div>
           </details>
         </div>
@@ -2276,7 +2397,7 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
 
   // Native script load — Safari handles this much better than fetch+eval
   var s = document.createElement("script");
-  s.src = "chipbox-app.js?v=mp56";
+  s.src = "chipbox-app.js?v=mp57";
   s.async = false;
   s.onload = function () {
     setMsg("Engine loaded — starting…");

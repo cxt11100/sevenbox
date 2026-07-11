@@ -1398,7 +1398,7 @@ try {
     setReadonlyUi(!canEdit());
     var freezeBtn = document.getElementById("sb-mp-freeze");
     if (freezeBtn) {
-      freezeBtn.textContent = roomFrozen ? "Unfreeze" : "Freeze";
+      freezeBtn.textContent = roomFrozen ? "Unlock song edits" : "Lock song edits";
       freezeBtn.disabled = !room || !isHost;
     }
   }
@@ -1446,16 +1446,16 @@ try {
     var el = document.getElementById("sb-mp-hash");
     if (!el) return;
     if (sig == null) {
-      el.textContent = "hash —";
+      el.textContent = "sync —";
       el.className = "sb-hash-badge idle";
       return;
     }
     var short = String(sig).slice(0, 6);
     if (fromRemote && lastSongSig != null && lastSongSig !== sig) {
-      el.textContent = "hash " + short + " syncing…";
+      el.textContent = "syncing…";
       el.className = "sb-hash-badge bad";
     } else {
-      el.textContent = "hash " + short + " · match";
+      el.textContent = "in sync";
       el.className = "sb-hash-badge ok";
       lastSongSig = sig;
     }
@@ -1496,7 +1496,7 @@ try {
     if (!el) return;
     el.innerHTML = "";
     if (!songQueue.length) {
-      el.innerHTML = '<div class="sb-srv-empty">Queue empty — add the current song</div>';
+      el.innerHTML = '<div class="sb-srv-empty">No songs yet — click “Add current song”</div>';
       return;
     }
     for (var i = 0; i < songQueue.length; i++) {
@@ -1509,7 +1509,8 @@ try {
           '<span style="color:#6dffa8;font-weight:700">' + (item.votes || 0) + " votes</span>";
         var vb = document.createElement("button");
         vb.type = "button";
-        vb.textContent = "Vote";
+        vb.textContent = "Vote +1";
+        vb.title = "Vote for this song";
         vb.addEventListener("click", function () {
           if (!room || !ws || ws.readyState !== 1) return;
           try { ws.send(JSON.stringify({ type: "queue_vote", id: item.id, room: room })); } catch (e) {}
@@ -1518,7 +1519,8 @@ try {
         if (isHost) {
           var pb = document.createElement("button");
           pb.type = "button";
-          pb.textContent = "Play";
+          pb.textContent = "Play now";
+          pb.title = "Host: load this song for the room";
           pb.addEventListener("click", function () {
             if (!ws || ws.readyState !== 1) return;
             try { ws.send(JSON.stringify({ type: "queue_play", id: item.id, room: room })); } catch (e) {}
@@ -1534,7 +1536,7 @@ try {
     var sel = document.getElementById("sb-mp-mod-target");
     if (!sel) return;
     var cur = sel.value;
-    sel.innerHTML = '<option value="">— player —</option>';
+    sel.innerHTML = '<option value="">Choose player…</option>';
     for (var i = 0; i < peers.length; i++) {
       var p = peers[i];
       if (!p || !p.name || namesMatch(p.name, getName())) continue;
@@ -1658,13 +1660,13 @@ try {
     var sel = document.getElementById("sb-mp-follow");
     if (!sel) return;
     var cur = followName;
-    sel.innerHTML = '<option value="">Follow: off</option>';
+    sel.innerHTML = '<option value="">Off</option>';
     for (var i = 0; i < peers.length; i++) {
       var p = peers[i];
       if (!p || !p.name || namesMatch(p.name, getName())) continue;
       var opt = document.createElement("option");
       opt.value = p.name;
-      opt.textContent = "Follow: " + p.name;
+      opt.textContent = p.name;
       if (cur && namesMatch(cur, p.name)) opt.selected = true;
       sel.appendChild(opt);
     }
@@ -1676,7 +1678,7 @@ try {
     var parts = [];
     var keys = Object.keys(trackOwners);
     if (!keys.length) {
-      sel.innerHTML = '<option value="">Track claims: free</option>';
+      sel.innerHTML = '<option value="">No tracks claimed yet</option>';
       return;
     }
     for (var i = 0; i < keys.length; i++) {
