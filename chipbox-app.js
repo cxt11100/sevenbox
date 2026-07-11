@@ -1304,7 +1304,7 @@ try {
 
   function placePlayheadMark(t, name, myName, myCh) {
     if (!t || !name) return;
-    // Never draw your own — BeepBox already draws YOUR solid full playhead
+    // You already have BeepBox's real solid playhead — only draw for OTHER players
     if (namesMatch(name, myName)) {
       if (t.trackEl) {
         t.trackEl.classList.remove("sb-on");
@@ -1315,7 +1315,7 @@ try {
     var chN = (typeof t.channel === "number" && !isNaN(t.channel)) ? (t.channel | 0) : 0;
     if (chN < 0) chN = 0;
 
-    // Ghost = alone on that track; solid BeepBox pink = 2+ people on it
+    // As you asked: ghost when alone on that track; solid when 2+ share it
     var solid = countPlayersOnChannel(chN) >= 2;
 
     var g = refreshPlayheadGeom(false);
@@ -1328,49 +1328,47 @@ try {
       el.style.display = "none";
       return;
     }
-    var row = g.rows[chN];
-    if (!row) {
-      var last = g.rows[g.rows.length - 1];
-      if (!last) {
-        el.classList.remove("sb-on");
-        el.style.display = "none";
-        return;
-      }
-      row = {
-        top: last.top + (chN - (g.rows.length - 1)) * (g.h || 28),
-        h: g.h || 28
-      };
+
+    // Full-height line = first track row top → last track row bottom
+    // (same visual as BeepBox's original pink playhead through all channels)
+    var first = g.rows[0];
+    var last = g.rows[g.rows.length - 1];
+    if (!first || !last) {
+      el.classList.remove("sb-on");
+      el.style.display = "none";
+      return;
     }
+    var fullTop = first.top;
+    var fullBottom = last.top + (last.h || g.h || 28);
+    var fullH = Math.max(40, fullBottom - fullTop);
 
     var vh = window.innerHeight || 800;
-    if (row.top + row.h < -20 || row.top > vh + 20) {
+    if (fullBottom < -20 || fullTop > vh + 20) {
       el.classList.remove("sb-on");
       el.style.display = "none";
       return;
     }
 
-    var phColor = g.color || getBeepBoxPlayheadColor();
-    var barH = Math.max(22, Math.min(30, (row.h | 0) || 26));
+    // Slight X offset per remote so multiple full lines don't perfectly stack
+    var lane = 0;
+    var keys = Object.keys(cursorTargets).sort();
+    for (var i = 0; i < keys.length; i++) {
+      if (namesMatch(keys[i], myName)) continue;
+      if (namesMatch(keys[i], name)) break;
+      lane++;
+    }
+    var leftX = Math.round(g.playX) + lane * 5;
 
-    /*
-     * WHY we don't put a 4px sliver on top of BeepBox's full playhead:
-     * It becomes invisible (same color, full-height line behind it) and only
-     * the name appears to "move up/down" — exactly the bug in the recording.
-     *
-     * Instead: band sits on the channel ROW starting at the playhead X and
-     * extending right so you see a clear per-track pink region + 4px edge.
-     */
-    var bandW = Math.min(160, Math.max(72, Math.round((window.innerWidth || 800) * 0.12)));
-    var leftX = Math.round(g.playX);
+    var phColor = g.color || getBeepBoxPlayheadColor();
 
     el.classList.add("sb-on");
     el.style.display = "block";
     el.style.left = leftX + "px";
-    el.style.top = Math.round(row.top) + "px";
-    el.style.width = bandW + "px";
-    el.style.height = barH + "px";
-    el.style.maxHeight = barH + "px";
-    el.style.minHeight = barH + "px";
+    el.style.top = Math.round(fullTop) + "px";
+    el.style.width = "4px";
+    el.style.height = Math.round(fullH) + "px";
+    el.style.maxHeight = "none";
+    el.style.minHeight = Math.round(fullH) + "px";
     el.style.overflow = "visible";
 
     if (solid) {
@@ -1384,42 +1382,31 @@ try {
     var bar = el.querySelector(".sb-ph-bar");
     if (bar) {
       bar.style.background = phColor;
-      bar.style.opacity = solid ? "1" : "0.4";
+      bar.style.height = "100%";
+      bar.style.width = "4px";
+      bar.style.opacity = solid ? "1" : "0.35";
     }
-    var wash = el.querySelector(".sb-ph-wash");
-    if (wash) {
-      if (solid) {
-        wash.style.background = "rgba(255, 79, 216, 0.18)";
-        wash.style.border = "1px solid " + phColor;
-        wash.style.borderLeft = "none";
-      } else {
-        wash.style.background = "rgba(255, 79, 216, 0.08)";
-        wash.style.border = "1px dashed " + phColor;
-        wash.style.borderLeft = "none";
-        wash.style.opacity = "0.9";
-      }
+
+    // Name at the other player's TRACK height (where they clicked), beside the line
+    var row = g.rows[chN];
+    if (!row) {
+      row = {
+        top: fullTop + chN * (g.h || 28),
+        h: g.h || 28
+      };
     }
+    var nameY = (row.top + (row.h || 28) * 0.5) - fullTop; // offset within the full bar
 
     var nm = el.querySelector(".sb-ph-name");
     if (nm) {
       nm.textContent = name || "?";
       nm.style.color = phColor;
-      var stack = 0;
-      var keys = Object.keys(cursorTargets);
-      for (var i = 0; i < keys.length; i++) {
-        var on = keys[i];
-        if (namesMatch(on, myName) || namesMatch(on, name)) continue;
-        var ot = cursorTargets[on];
-        if (!ot) continue;
-        var oc = (typeof ot.channel === "number") ? (ot.channel | 0) : 0;
-        if (oc === chN && on < name) stack++;
-      }
-      nm.style.left = (8 + stack * 70) + "px";
-      nm.style.top = "50%";
+      nm.style.left = "6px";
+      nm.style.top = Math.round(nameY) + "px";
       nm.style.transform = "translateY(-50%)";
     }
     el.title = (name || "?") + " · track " + chN +
-      (solid ? " · 2+ on this track (solid pink)" : " · alone on track (ghost pink)");
+      (solid ? " · shared (solid pink)" : " · ghost pink");
   }
 
   var PH_TICK_MS = 33;
