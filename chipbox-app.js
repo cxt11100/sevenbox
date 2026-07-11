@@ -921,14 +921,16 @@ try {
     return layer;
   }
 
-  // Remote cursors: glide along network samples (not rubber-band chase — that feels "weird")
+  // Remote cursors: smooth chase toward latest network sample (no coast/teleport jumps)
   var cursorTargets = {};
   var cursorRaf = 0;
   var cursorLayerSize = { w: 1, h: 1 };
-  // How long to ease between two network points (ms). ~ packet interval.
-  var CURSOR_SEG_MS = 45;
-  // Mild coast past last sample if next packet is late (fraction of seg)
-  var CURSOR_COAST = 0.15;
+  // Higher = snappier follow. ~14–22 feels live without rubber-banding hard.
+  var CURSOR_SMOOTH = 16;
+  // Soft max predict ahead of last packet (ms) — keeps motion flowing if a packet is late
+  var CURSOR_PREDICT_MS = 35;
+  // Only hard-snap if they teleported across most of the editor (rejoin / huge lag spike)
+  var CURSOR_SNAP_DIST = 0.55;
 
   function measureCursorLayer() {
     // Use the VISIBLE editor box size (clientWidth), not scrollWidth — avoids huge right gap
@@ -1027,27 +1029,48 @@ try {
     return el;
   }
 
-  function easeOutQuad(u) {
-    return 1 - (1 - u) * (1 - u);
-  }
-
   function setCursorSample(cur, nx, ny, now) {
-    var fx = cur.dx != null ? cur.dx : (cur.toX != null ? cur.toX : nx);
-    var fy = cur.dy != null ? cur.dy : (cur.toY != null ? cur.toY : ny);
-    var dist = Math.abs(nx - fx) + Math.abs(ny - fy);
-    if (dist > 0.4 || cur.toX == null) {
-      cur.fromX = nx; cur.fromY = ny;
-      cur.toX = nx; cur.toY = ny;
-      cur.dx = nx; cur.dy = ny;
-      cur.segStart = now;
-      cur.segMs = 1;
+    if (nx == null || ny == null || isNaN(nx) || isNaN(ny)) return;
+    var prevTx = cur.toX;
+    var prevTy = cur.toY;
+    var havePrev = prevTx != null && prevTy != null && !isNaN(prevTx) && !isNaN(prevTy);
+    var dx = cur.dx != null ? cur.dx : (havePrev ? prevTx : nx);
+    var dy = cur.dy != null ? cur.dy : (havePrev ? prevTy : ny);
+    var dist = Math.abs(nx - dx) + Math.abs(ny - dy);
+
+    // First sample / reappear far away — snap once so we don't crawl across the whole grid
+    if (!havePrev || dist > CURSOR_SNAP_DIST || cur.dx == null) {
+      cur.toX = nx;
+      cur.toY = ny;
+      cur.dx = nx;
+      cur.dy = ny;
+      cur.vx = 0;
+      cur.vy = 0;
+      cur.lastSampleAt = now;
+      cur.lastFrame = now;
       return;
     }
-    if (dist < 0.003) return;
-    cur.fromX = fx; cur.fromY = fy;
-    cur.toX = nx; cur.toY = ny;
-    cur.segStart = now;
-    cur.segMs = Math.max(30, Math.min(70, CURSOR_SEG_MS + dist * 40));
+
+    // Ignore pure noise
+    if (dist < 0.0015) {
+      cur.toX = nx;
+      cur.toY = ny;
+      cur.lastSampleAt = now;
+      return;
+    }
+
+    // Velocity from last network target → this one (for mild predict between packets)
+    var dt = now - (cur.lastSampleAt || now);
+    if (dt > 8 && dt < 250) {
+      cur.vx = (nx - prevTx) / dt;
+      cur.vy = (ny - prevTy) / dt;
+    } else {
+      cur.vx = (cur.vx || 0) * 0.4;
+      cur.vy = (cur.vy || 0) * 0.4;
+    }
+    cur.toX = nx;
+    cur.toY = ny;
+    cur.lastSampleAt = now;
   }
 
   function placeMouseCursor(t, name, myName, myCh, now) {
@@ -1081,20 +1104,23 @@ try {
       return;
     }
 
-    var elapsed = now - (t.segStart || now);
-    var u = elapsed / (t.segMs || CURSOR_SEG_MS);
-    var x, y;
-    if (u <= 1) {
-      var e = easeOutQuad(Math.max(0, Math.min(1, u)));
-      x = t.fromX + (t.toX - t.fromX) * e;
-      y = t.fromY + (t.toY - t.fromY) * e;
-    } else {
-      var coast = Math.min(CURSOR_COAST, u - 1);
-      x = t.toX + (t.toX - t.fromX) * coast * 0.25;
-      y = t.toY + (t.toY - t.fromY) * coast * 0.25;
-      x = Math.max(0, Math.min(1, x));
-      y = Math.max(0, Math.min(1, y));
-    }
+    // Frame-time exponential chase toward (slightly predicted) target — continuous, no coast snap-back
+    var lastF = t.lastFrame != null ? t.lastFrame : now;
+    var dt = Math.max(0.001, Math.min(0.05, (now - lastF) / 1000));
+    t.lastFrame = now;
+    var age = now - (t.lastSampleAt || now);
+    var pred = Math.max(0, Math.min(CURSOR_PREDICT_MS, age));
+    // Fade predict if packet is late so we don't overshoot then yank
+    if (age > 80) pred *= Math.max(0, 1 - (age - 80) / 120);
+    var tx = t.toX + (t.vx || 0) * pred;
+    var ty = t.toY + (t.vy || 0) * pred;
+    tx = Math.max(0, Math.min(1, tx));
+    ty = Math.max(0, Math.min(1, ty));
+    if (t.dx == null || isNaN(t.dx)) t.dx = tx;
+    if (t.dy == null || isNaN(t.dy)) t.dy = ty;
+    var k = 1 - Math.exp(-CURSOR_SMOOTH * dt);
+    var x = t.dx + (tx - t.dx) * k;
+    var y = t.dy + (ty - t.dy) * k;
     t.dx = x;
     t.dy = y;
 
@@ -1114,8 +1140,10 @@ try {
 
     el.classList.add("sb-on");
     el.style.display = "block";
-    el.style.left = Math.round(px) + "px";
-    el.style.top = Math.round(py) + "px";
+    // subpixel transform = less 1px jitter than left/top rounding
+    el.style.left = "0";
+    el.style.top = "0";
+    el.style.transform = "translate3d(" + px.toFixed(1) + "px," + py.toFixed(1) + "px,0)";
     el.style.setProperty("--line", color);
     if (same) {
       el.classList.add("same-ch");
@@ -1186,14 +1214,14 @@ try {
           color: color,
           el: ensureCursorEl(p.name, color),
           lastCh: pCh,
-          fromX: nx != null ? nx : 0.5,
-          fromY: ny != null ? ny : 0.5,
           toX: nx != null ? nx : 0.5,
           toY: ny != null ? ny : 0.5,
           dx: nx != null ? nx : 0.5,
           dy: ny != null ? ny : 0.5,
-          segStart: now,
-          segMs: 1,
+          vx: 0,
+          vy: 0,
+          lastSampleAt: now,
+          lastFrame: now,
           inside: inside,
           lastNx: nx,
           lastNy: ny
@@ -1788,10 +1816,10 @@ try {
     } catch (e) {}
   }
 
-  // Snappy multiplayer cursors (~25 Hz when moving)
+  // Multiplayer cursors (~40–50 Hz when moving — smoother path, less jump)
   var lastPresenceSent = 0;
   var presenceFlushTimer = null;
-  var PRESENCE_MIN_MS = 40;
+  var PRESENCE_MIN_MS = 22;
   var lastSentChannel = -999;
   var lastSentXY = { x: -1, y: -1 };
 
@@ -1821,10 +1849,10 @@ try {
     // skip tiny mouse noise when channel unchanged
     if (!force && ch === lastSentChannel && lastSentXY.x >= 0) {
       var md = Math.abs(x - lastSentXY.x) + Math.abs(y - lastSentXY.y);
-      if (md < 0.003 && inside && (now - lastPresenceSent) < 120) return;
+      if (md < 0.002 && inside && (now - lastPresenceSent) < 90) return;
     }
     var key = x + "," + y + "," + (inside ? 1 : 0) + "," + ch + "," + bar;
-    if (!force && key === lastPresenceKey && (now - lastPresenceSent) < 200) return;
+    if (!force && key === lastPresenceKey && (now - lastPresenceSent) < 150) return;
     lastPresenceKey = key;
     lastPresenceSent = now;
     lastSentChannel = ch;
