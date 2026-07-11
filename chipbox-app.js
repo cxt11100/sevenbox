@@ -1486,6 +1486,155 @@ try {
       try { if (el.parentNode) el.parentNode.removeChild(el); } catch (e) {}
     }, 1200);
   }
+  var songQueue = [];
+  var ghostReplayTimer = null;
+  var ghostEls = [];
+
+  function renderQueue(list) {
+    songQueue = list || [];
+    var el = document.getElementById("sb-mp-queue-list");
+    if (!el) return;
+    el.innerHTML = "";
+    if (!songQueue.length) {
+      el.innerHTML = '<div class="sb-srv-empty">Queue empty — add the current song</div>';
+      return;
+    }
+    for (var i = 0; i < songQueue.length; i++) {
+      (function (item) {
+        var row = document.createElement("div");
+        row.className = "sb-queue-item";
+        row.innerHTML =
+          '<span class="sb-q-title">' + escapeHtml(item.title || "song") +
+          ' <span style="color:#666">by ' + escapeHtml(item.by || "?") + "</span></span>" +
+          '<span style="color:#6dffa8;font-weight:700">' + (item.votes || 0) + " votes</span>";
+        var vb = document.createElement("button");
+        vb.type = "button";
+        vb.textContent = "Vote";
+        vb.addEventListener("click", function () {
+          if (!room || !ws || ws.readyState !== 1) return;
+          try { ws.send(JSON.stringify({ type: "queue_vote", id: item.id, room: room })); } catch (e) {}
+        });
+        row.appendChild(vb);
+        if (isHost) {
+          var pb = document.createElement("button");
+          pb.type = "button";
+          pb.textContent = "Play";
+          pb.addEventListener("click", function () {
+            if (!ws || ws.readyState !== 1) return;
+            try { ws.send(JSON.stringify({ type: "queue_play", id: item.id, room: room })); } catch (e) {}
+          });
+          row.appendChild(pb);
+        }
+        el.appendChild(row);
+      })(songQueue[i]);
+    }
+  }
+
+  function refreshModTargets() {
+    var sel = document.getElementById("sb-mp-mod-target");
+    if (!sel) return;
+    var cur = sel.value;
+    sel.innerHTML = '<option value="">— player —</option>';
+    for (var i = 0; i < peers.length; i++) {
+      var p = peers[i];
+      if (!p || !p.name || namesMatch(p.name, getName())) continue;
+      var o = document.createElement("option");
+      o.value = p.name;
+      o.textContent = p.name + (p.muted ? " (muted)" : "") + (p.timeout ? " (timeout)" : "");
+      if (cur && namesMatch(cur, p.name)) o.selected = true;
+      sel.appendChild(o);
+    }
+  }
+
+  function stopGhostReplay() {
+    if (ghostReplayTimer) {
+      clearTimeout(ghostReplayTimer);
+      ghostReplayTimer = null;
+    }
+    for (var i = 0; i < ghostEls.length; i++) {
+      try {
+        if (ghostEls[i] && ghostEls[i].parentNode) ghostEls[i].parentNode.removeChild(ghostEls[i]);
+      } catch (e) {}
+    }
+    ghostEls = [];
+  }
+
+  function playGhostTape(tape) {
+    stopGhostReplay();
+    tape = tape || [];
+    if (!tape.length) {
+      showToast("No ghost tape yet — move around in the room first", "");
+      return;
+    }
+    var t0 = tape[0].t || 0;
+    var i = 0;
+    showToast("Ghost jam replaying…", "react");
+    function step() {
+      if (i >= tape.length) {
+        stopGhostReplay();
+        showToast("Ghost jam finished", "");
+        return;
+      }
+      var frame = tape[i];
+      var peersF = frame.peers || [];
+      var box = document.getElementById("beepboxEditorContainer");
+      var r = box ? box.getBoundingClientRect() : { left: 0, top: 0, width: 1, height: 1 };
+      // reuse/create ghost arrows
+      while (ghostEls.length < peersF.length) {
+        var g = document.createElement("div");
+        g.className = "sb-ghost-cursor";
+        document.body.appendChild(g);
+        ghostEls.push(g);
+      }
+      for (var g2 = peersF.length; g2 < ghostEls.length; g2++) {
+        ghostEls[g2].style.display = "none";
+      }
+      for (var j = 0; j < peersF.length; j++) {
+        var p = peersF[j];
+        var el = ghostEls[j];
+        el.style.display = "block";
+        var px = r.left + (+p.x || 0) * r.width;
+        var py = r.top + (+p.y || 0) * r.height;
+        el.style.left = px + "px";
+        el.style.top = py + "px";
+        el.title = (p.name || "ghost") + " (ghost)";
+        el.style.borderLeftColor = peerColorFor(p.name || "g", j);
+      }
+      i++;
+      if (i < tape.length) {
+        var dt = Math.max(40, Math.min(200, (tape[i].t || 0) - (frame.t || 0)));
+        ghostReplayTimer = setTimeout(step, dt);
+      } else {
+        ghostReplayTimer = setTimeout(function () {
+          stopGhostReplay();
+          showToast("Ghost jam finished", "");
+        }, 400);
+      }
+    }
+    step();
+  }
+
+  function applyEditorTheme(name) {
+    name = String(name || "").trim();
+    if (!name) return;
+    try {
+      if (typeof beepbox !== "undefined" && beepbox.ColorConfig && typeof beepbox.ColorConfig.setTheme === "function") {
+        beepbox.ColorConfig.setTheme(name);
+        showToast("Editor theme: " + name, "");
+        return;
+      }
+    } catch (e) {}
+    // fallback: known theme keys on ColorConfig.themes
+    try {
+      if (typeof beepbox !== "undefined" && beepbox.ColorConfig && beepbox.ColorConfig.themes && beepbox.ColorConfig.themes[name]) {
+        beepbox.ColorConfig.setTheme(name);
+        showToast("Editor theme: " + name, "");
+        return;
+      }
+    } catch (e2) {}
+    showToast("Theme not available in this build", "err");
+  }
+
   function applyRoomExtras(msg) {
     if (!msg) return;
     if (msg.frozen != null) roomFrozen = !!msg.frozen;
@@ -1499,9 +1648,11 @@ try {
     if (msg.jamLog) loadJamLog(msg.jamLog);
     if (msg.jamEvent && msg.jamEvent.text) appendJamLine(msg.jamEvent.text);
     if (msg.sig != null) updateHashBadge(msg.sig, false);
+    if (msg.queue) renderQueue(msg.queue);
     applyRoomEditLock();
     refreshFollowSelect();
     refreshTrackOwnerSelect();
+    refreshModTargets();
   }
   function refreshFollowSelect() {
     var sel = document.getElementById("sb-mp-follow");
@@ -3144,7 +3295,12 @@ try {
         if (msg.from !== lastRemoteEditFrom || Date.now() - (window._sbLastEditToast || 0) > 2500) {
           lastRemoteEditFrom = msg.from;
           window._sbLastEditToast = Date.now();
-          showToast(msg.from + " edited the song", "edit");
+          showToast(
+            msg.queuePlay
+              ? (msg.from + " played queued \"" + (msg.queueTitle || "song") + "\"")
+              : (msg.from + " edited the song"),
+            "edit"
+          );
         }
       }
       if (msg.frozen != null) {
@@ -3226,6 +3382,20 @@ try {
     } else if (msg.type === "react") {
       spawnReact(msg.emoji || "👏", msg.x, msg.y);
       showToast((msg.from || "?") + " " + (msg.emoji || "👏"), "react");
+    } else if (msg.type === "queue") {
+      if (msg.queue) renderQueue(msg.queue);
+      if (msg.jamEvent && msg.jamEvent.text) appendJamLine(msg.jamEvent.text);
+    } else if (msg.type === "mod") {
+      if (msg.jamEvent && msg.jamEvent.text) appendJamLine(msg.jamEvent.text);
+      if (msg.peers) renderPeers(msg.peers, { forceChips: true });
+      refreshModTargets();
+      showToast((msg.from || "host") + " " + (msg.action || "mod") + " " + (msg.target || ""), "edit");
+    } else if (msg.type === "report") {
+      if (msg.jamEvent && msg.jamEvent.text) appendJamLine(msg.jamEvent.text);
+      var r = msg.report || {};
+      showToast("Report: " + (r.target || "?") + " — " + (r.reason || ""), "err");
+    } else if (msg.type === "ghost_tape") {
+      playGhostTape(msg.tape || []);
     } else if (msg.type === "error") {
       var em = msg.message || "error";
       setStatus(em, "err");
@@ -3719,6 +3889,135 @@ try {
     if (qrClose && qrPop) {
       qrClose.addEventListener("click", function () { qrPop.classList.remove("sb-show"); });
     }
+
+    // Song queue
+    var qAdd = document.getElementById("sb-mp-queue-add");
+    if (qAdd) {
+      qAdd.addEventListener("click", function () {
+        if (!room || !ws || ws.readyState !== 1) {
+          setStatus("Join a room to queue songs", "err");
+          return;
+        }
+        var s = currentSong();
+        if (!s) {
+          setStatus("No song to queue", "err");
+          return;
+        }
+        try {
+          ws.send(JSON.stringify({
+            type: "queue_add",
+            song: s,
+            title: roomTitle || "song",
+            room: room
+          }));
+          showToast("Added to queue", "edit");
+        } catch (e) {}
+      });
+    }
+    var qPlay = document.getElementById("sb-mp-queue-play");
+    if (qPlay) {
+      qPlay.addEventListener("click", function () {
+        if (!isHost) { setStatus("Only host can play the queue", "err"); return; }
+        if (!ws || ws.readyState !== 1) return;
+        try { ws.send(JSON.stringify({ type: "queue_play", room: room })); } catch (e) {}
+      });
+    }
+    var qClear = document.getElementById("sb-mp-queue-clear");
+    if (qClear) {
+      qClear.addEventListener("click", function () {
+        if (!isHost) { setStatus("Only host can clear queue", "err"); return; }
+        if (!ws || ws.readyState !== 1) return;
+        try { ws.send(JSON.stringify({ type: "queue_clear", room: room })); } catch (e) {}
+      });
+    }
+
+    // Moderation
+    function sendMod(action, seconds) {
+      if (!room || !ws || ws.readyState !== 1) return;
+      var sel = document.getElementById("sb-mp-mod-target");
+      var target = sel && sel.value;
+      if (!target) { setStatus("Pick a player first", "err"); return; }
+      if (!isHost && !isLocalOwner()) {
+        setStatus("Only host/owner can moderate", "err");
+        return;
+      }
+      var payload = { type: "mod", action: action, target: target, room: room };
+      if (seconds) payload.seconds = seconds;
+      try { ws.send(JSON.stringify(payload)); } catch (e) {}
+    }
+    var mMute = document.getElementById("sb-mp-mod-mute");
+    if (mMute) mMute.addEventListener("click", function () { sendMod("mute"); });
+    var mUnmute = document.getElementById("sb-mp-mod-unmute");
+    if (mUnmute) mUnmute.addEventListener("click", function () { sendMod("unmute"); });
+    var mTo = document.getElementById("sb-mp-mod-timeout");
+    if (mTo) mTo.addEventListener("click", function () { sendMod("timeout", 120); });
+    var mRep = document.getElementById("sb-mp-mod-report");
+    if (mRep) {
+      mRep.addEventListener("click", function () {
+        if (!room || !ws || ws.readyState !== 1) return;
+        var sel = document.getElementById("sb-mp-mod-target");
+        var target = sel && sel.value;
+        if (!target) { setStatus("Pick a player to report", "err"); return; }
+        var reason = window.prompt("Report reason (optional)", "disruptive") || "report";
+        try {
+          ws.send(JSON.stringify({ type: "report", target: target, reason: reason, room: room }));
+        } catch (e) {}
+      });
+    }
+
+    // Ghost replay
+    var gPlay = document.getElementById("sb-mp-ghost-play");
+    if (gPlay) {
+      gPlay.addEventListener("click", function () {
+        if (!room || !ws || ws.readyState !== 1) {
+          setStatus("Join a room first", "err");
+          return;
+        }
+        try { ws.send(JSON.stringify({ type: "ghost_get", room: room })); } catch (e) {}
+      });
+    }
+    var gStop = document.getElementById("sb-mp-ghost-stop");
+    if (gStop) gStop.addEventListener("click", function () { stopGhostReplay(); });
+
+    // LAN party
+    var lanBtn = document.getElementById("sb-mp-lan");
+    if (lanBtn) {
+      lanBtn.addEventListener("click", function () {
+        var box = document.getElementById("sb-mp-lan-box");
+        if (!box) return;
+        box.style.display = "block";
+        box.textContent = "Loading LAN links…";
+        fetch("/health", { cache: "no-store" })
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            var lans = (j && j.lan) || [];
+            if (!lans.length) {
+              box.innerHTML =
+                "LAN links only work when running the server on your PC.<br>" +
+                "Friends on the same Wi‑Fi open: <b>http://YOUR-IP:8765/chipbox.html</b><br>" +
+                "Online host: share the public SevenBox link instead.";
+              return;
+            }
+            box.innerHTML =
+              "<b>Same Wi‑Fi — open one of these:</b><br>" +
+              lans.map(function (u) {
+                return '<a href="' + escapeHtml(u) + '" style="color:#7ae7ff">' + escapeHtml(u) + "</a>";
+              }).join("<br>");
+          })
+          .catch(function () {
+            box.textContent = "Could not load LAN info. Online? Use Copy invite link instead.";
+          });
+      });
+    }
+
+    // Native BeepBox editor themes
+    var th = document.getElementById("sb-mp-editor-theme");
+    if (th) {
+      th.addEventListener("change", function () {
+        if (th.value) applyEditorTheme(th.value);
+      });
+    }
+
     applyRoomEditLock();
   })();
 

@@ -887,6 +887,53 @@ body {
   padding-top: 6px;
   border-top: 1px solid #1c1c1c;
 }
+.sb-queue-list {
+  width: 100%;
+  max-height: 120px;
+  overflow-y: auto;
+  border: 1px solid #222;
+  border-radius: 6px;
+  background: #080808;
+  margin-top: 4px;
+}
+.sb-queue-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid #1a1a1a;
+  font-size: 12px;
+  color: #ccc;
+}
+.sb-queue-item:last-child { border-bottom: none; }
+.sb-queue-item .sb-q-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-queue-item button {
+  min-height: 28px !important;
+  padding: 4px 8px !important;
+  font-size: 11px !important;
+}
+.sb-lan-box {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: #0c0c0c;
+  font: 12px/1.4 ui-monospace, monospace;
+  color: #9ad4ff;
+  word-break: break-all;
+}
+.sb-ghost-cursor {
+  position: fixed;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 99945;
+  opacity: 0.45;
+  border-style: solid;
+  border-width: 0 0 14px 10px;
+  border-color: transparent transparent transparent #88aaff;
+  filter: drop-shadow(0 0 2px #000);
+}
 .sb-jam-tools select,
 .sb-jam-tools button {
   font-size: 11px !important;
@@ -1972,10 +2019,39 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
                 <select id="sb-mp-track-owner" title="Track claims">
                   <option value="">Track claims: free</option>
                 </select>
-                <button type="button" id="sb-mp-track-claim" title="Claim your current track">Claim track</button>
-                <button type="button" id="sb-mp-track-clear" title="Host: clear all track claims">Clear claims</button>
+                <button type="button" id="sb-mp-track-claim" title="Claim ownership of your current track">Own track</button>
+                <button type="button" id="sb-mp-track-clear" title="Host: clear all track ownership">Clear ownership</button>
                 <button type="button" id="sb-mp-apply-role-inroom" title="Host: apply joiner permission to everyone">Apply perms</button>
               </div>
+              <div class="sb-mp-section-label" style="margin-top:8px">Song queue</div>
+              <div class="sb-mp-row">
+                <button type="button" id="sb-mp-queue-add" title="Add current song to room queue">Queue this song</button>
+                <button type="button" id="sb-mp-queue-play" title="Host: play top-voted song">Play top vote</button>
+                <button type="button" id="sb-mp-queue-clear" title="Host: clear queue">Clear queue</button>
+              </div>
+              <div id="sb-mp-queue-list" class="sb-queue-list"><div class="sb-srv-empty">Queue empty</div></div>
+              <div class="sb-mp-section-label" style="margin-top:8px">Moderation</div>
+              <div class="sb-mp-row">
+                <select id="sb-mp-mod-target" title="Player"><option value="">— player —</option></select>
+                <button type="button" id="sb-mp-mod-mute">Mute</button>
+                <button type="button" id="sb-mp-mod-unmute">Unmute</button>
+                <button type="button" id="sb-mp-mod-timeout" title="2 min timeout">Timeout 2m</button>
+                <button type="button" id="sb-mp-mod-report">Report</button>
+              </div>
+              <div class="sb-mp-section-label" style="margin-top:8px">Ghost replay · LAN · Theme</div>
+              <div class="sb-mp-row">
+                <button type="button" id="sb-mp-ghost-play" title="Replay recent room movement as ghosts">Play ghost jam</button>
+                <button type="button" id="sb-mp-ghost-stop">Stop ghosts</button>
+                <button type="button" id="sb-mp-lan" title="Show same-Wi‑Fi links">LAN party</button>
+                <select id="sb-mp-editor-theme" title="Editor look (BeepBox themes)">
+                  <option value="">Editor theme…</option>
+                  <option value="dark classic">dark classic</option>
+                  <option value="dark competition">dark competition</option>
+                  <option value="light classic">light classic</option>
+                  <option value="light competition">light competition</option>
+                </select>
+              </div>
+              <div id="sb-mp-lan-box" class="sb-lan-box" style="display:none"></div>
               <div id="sb-mp-jamlog" aria-label="Jam session log"></div>
             </div>
           </details>
@@ -2051,6 +2127,14 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
       <details class="sb-updates" id="sb-updates">
         <summary>Update board</summary>
         <div class="sb-updates-body">
+          <div class="sb-update-item">
+            <div class="when">2026-07-11 · mp56</div>
+            <div class="what">
+              <strong>Medium-big features:</strong>
+              track ownership, song queue + votes, ghost jam replay, LAN party links,
+              host mute/timeout/report, BeepBox editor themes.
+            </div>
+          </div>
           <div class="sb-update-item">
             <div class="when">2026-07-11 · mp55</div>
             <div class="what">
@@ -2192,7 +2276,7 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
 
   // Native script load — Safari handles this much better than fetch+eval
   var s = document.createElement("script");
-  s.src = "chipbox-app.js?v=mp55";
+  s.src = "chipbox-app.js?v=mp56";
   s.async = false;
   s.onload = function () {
     setMsg("Engine loaded — starting…");

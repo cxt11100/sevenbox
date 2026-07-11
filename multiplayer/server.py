@@ -18,6 +18,7 @@ import mimetypes
 import os
 import random
 import re
+import socket
 import sys
 import time
 import zlib
@@ -232,9 +233,19 @@ class Room:
         self.typing: dict[ServerConnection, float] = {}  # ws -> last typing time
         self._lobby_sig: str = ""  # playing|bpm|count — only rebroadcast list when this changes
         self.frozen: bool = False  # host freeze: non-hosts view-only
-        self.track_owners: dict[int, str] = {}  # channel -> player name
+        self.track_owners: dict[int, str] = {}  # channel -> player name (track ownership)
         self.jam_log: list[dict[str, Any]] = []  # short session tape
         self._react_last: dict[ServerConnection, float] = {}
+        # Moderation
+        self.muted: set[str] = set()  # lowercased names
+        self.timeouts: dict[str, float] = {}  # lowercased name -> unix expiry
+        self.reports: list[dict[str, Any]] = []
+        # Song queue (vote / next)
+        self.song_queue: list[dict[str, Any]] = []
+        self._queue_seq: int = 0
+        # Ghost replay tape (presence samples, ~2 min)
+        self.ghost_tape: list[dict[str, Any]] = []
+        self._ghost_last_ts: float = 0.0
 
     def add_jam(self, text: str, kind: str = "sys") -> dict[str, Any]:
         entry = {
@@ -248,7 +259,64 @@ class Room:
             self.jam_log = self.jam_log[-40:]
         return entry
 
+    def purge_timeouts(self) -> None:
+        now = time.time()
+        dead = [k for k, exp in self.timeouts.items() if exp <= now]
+        for k in dead:
+            self.timeouts.pop(k, None)
+
+    def is_muted(self, name: str) -> bool:
+        return str(name or "").lower() in self.muted
+
+    def is_timed_out(self, name: str) -> bool:
+        self.purge_timeouts()
+        exp = self.timeouts.get(str(name or "").lower())
+        return bool(exp and exp > time.time())
+
+    def queue_public(self) -> list[dict[str, Any]]:
+        out = []
+        for item in self.song_queue:
+            out.append(
+                {
+                    "id": item["id"],
+                    "title": item.get("title") or "song",
+                    "by": item.get("by") or "?",
+                    "votes": len(item.get("votes") or set()),
+                    "ts": item.get("ts") or 0,
+                }
+            )
+        return out
+
+    def record_ghost_sample(self) -> None:
+        """Sample peer positions for ghost replay (throttled)."""
+        now = time.time()
+        if now - self._ghost_last_ts < 0.12:
+            return
+        self._ghost_last_ts = now
+        peers = []
+        for c in self.clients:
+            p = self.presence.get(c) or {}
+            nm = self.names.get(c, "player")
+            if p.get("x") is None or p.get("y") is None:
+                continue
+            peers.append(
+                {
+                    "name": nm,
+                    "x": p.get("x"),
+                    "y": p.get("y"),
+                    "channel": int(p.get("channel") or 0),
+                    "inside": bool(p.get("inside", True)),
+                }
+            )
+        if not peers:
+            return
+        self.ghost_tape.append({"t": int(now * 1000), "peers": peers})
+        # keep ~90s at ~8 samples/s
+        if len(self.ghost_tape) > 720:
+            self.ghost_tape = self.ghost_tape[-720:]
+
     def peer_list(self) -> list[dict[str, Any]]:
+        self.purge_timeouts()
         out = []
         for c in self.clients:
             p = self.presence.get(c) or {}
@@ -273,6 +341,7 @@ class Room:
             if st not in ("edit", "listen", "afk"):
                 st = "edit"
             nm = self.names.get(c, "player")
+            low = nm.lower()
             out.append(
                 {
                     "name": nm,
@@ -283,6 +352,8 @@ class Room:
                     "y": y,
                     "inside": inside,
                     "status": st,
+                    "muted": low in self.muted,
+                    "timeout": bool(self.timeouts.get(low) and self.timeouts[low] > time.time()),
                     "isHost": c is self.host,
                     # Only real "seven" (key-checked at join) can ever be true
                     "isOwner": is_seven_name(nm),
@@ -291,12 +362,56 @@ class Room:
         return out
 
     def room_extras(self) -> dict[str, Any]:
+        self.purge_timeouts()
         return {
             "frozen": bool(self.frozen),
             "trackOwners": {str(k): v for k, v in self.track_owners.items()},
             "jamLog": self.jam_log[-30:],
             "sig": song_sig(self.song),
+            "queue": self.queue_public(),
+            "muted": sorted(self.muted),
+            "timeouts": {
+                k: int((v - time.time()) * 1000)
+                for k, v in self.timeouts.items()
+                if v > time.time()
+            },
         }
+
+
+def lan_urls(port: int) -> list[str]:
+    """Best-effort LAN URLs for party mode (same Wi‑Fi)."""
+    urls: list[str] = []
+    seen: set[str] = set()
+
+    def add(ip: str) -> None:
+        if not ip or ip.startswith("127.") or ip in seen:
+            return
+        if ":" in ip and not ip.startswith("["):  # skip raw ipv6 noise
+            return
+        seen.add(ip)
+        urls.append(f"http://{ip}:{port}/chipbox.html")
+
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        add(s.getsockname()[0])
+        s.close()
+    except Exception:
+        pass
+    try:
+        host = socket.gethostname()
+        for ip in socket.gethostbyname_ex(host)[2]:
+            add(ip)
+    except Exception:
+        pass
+    return urls[:6]
+
+
+def can_moderate(room: Room, ws: ServerConnection) -> bool:
+    if ws is room.host:
+        return True
+    nm = room.names.get(ws, "")
+    return is_seven_name(nm)
 
     def lobby_entry(self) -> dict[str, Any]:
         host_name = self.names.get(self.host, "host")
@@ -836,6 +951,10 @@ async def ws_handler(ws: ServerConnection) -> None:
                 if not room:
                     continue
                 role = room.roles.get(ws, "view")
+                name_st = room.names.get(ws, "player")
+                if room.is_timed_out(name_st):
+                    await send(ws, {"type": "error", "message": "Timed out — can't edit"})
+                    continue
                 if role == "view" or (room.frozen and ws is not room.host):
                     await send(
                         ws,
@@ -850,7 +969,7 @@ async def ws_handler(ws: ServerConnection) -> None:
                         },
                     )
                     continue
-                # Soft track claim: non-host can't push edits while on a claimed foreign track
+                # Track ownership: non-host can't push edits on a claimed foreign track
                 try:
                     ch_edit = int(msg.get("channel") if msg.get("channel") is not None else -1)
                 except (TypeError, ValueError):
@@ -865,7 +984,7 @@ async def ws_handler(ws: ServerConnection) -> None:
                         ws,
                         {
                             "type": "error",
-                            "message": f"Track {ch_edit} is claimed by {room.track_owners[ch_edit]}",
+                            "message": f"Track {ch_edit} is owned by {room.track_owners[ch_edit]}",
                         },
                     )
                     continue
@@ -1025,6 +1144,7 @@ async def ws_handler(ws: ServerConnection) -> None:
                     if ws in room.names:
                         room.names[ws] = str(msg.get("name"))[:24]
                 schedule_presence_broadcast(room)
+                room.record_ghost_sample()
 
             elif mtype == "freeze":
                 code = client_room.get(ws)
@@ -1135,6 +1255,9 @@ async def ws_handler(ws: ServerConnection) -> None:
                     await send(ws, {"type": "error", "message": "join a room to chat"})
                     continue
                 name = room.names.get(ws, "player")
+                if room.is_muted(name) or room.is_timed_out(name):
+                    await send(ws, {"type": "error", "message": "You're muted or timed out"})
+                    continue
                 text = " ".join(str(msg.get("text") or "").strip().split())
                 if not text:
                     continue
@@ -1173,6 +1296,240 @@ async def ws_handler(ws: ServerConnection) -> None:
                 await broadcast_room(room, entry)
                 # also refresh typing list without this sender
                 await broadcast_typing(room)
+
+            elif mtype == "mod":
+                # Host/owner: mute, unmute, timeout, untimeout
+                code = client_room.get(ws)
+                room = rooms.get(code) if code else None
+                if not room or ws not in room.clients:
+                    continue
+                if not can_moderate(room, ws):
+                    await send(ws, {"type": "error", "message": "only host/owner can moderate"})
+                    continue
+                action = str(msg.get("action") or "").lower()
+                target = normalize_name(str(msg.get("target") or ""))
+                if not target:
+                    await send(ws, {"type": "error", "message": "pick a player to moderate"})
+                    continue
+                tlow = target.lower()
+                who = room.names.get(ws, "host")
+                if action == "mute":
+                    room.muted.add(tlow)
+                    entry = room.add_jam(f"{who} muted {target}", "mod")
+                elif action == "unmute":
+                    room.muted.discard(tlow)
+                    entry = room.add_jam(f"{who} unmuted {target}", "mod")
+                elif action == "timeout":
+                    secs = int(msg.get("seconds") or 120)
+                    if secs < 30:
+                        secs = 30
+                    if secs > 3600:
+                        secs = 3600
+                    room.timeouts[tlow] = time.time() + secs
+                    entry = room.add_jam(f"{who} timed out {target} ({secs}s)", "mod")
+                elif action == "untimeout":
+                    room.timeouts.pop(tlow, None)
+                    entry = room.add_jam(f"{who} cleared timeout on {target}", "mod")
+                else:
+                    await send(ws, {"type": "error", "message": "unknown mod action"})
+                    continue
+                await broadcast_room(
+                    room,
+                    {
+                        "type": "mod",
+                        "action": action,
+                        "target": target,
+                        "from": who,
+                        "muted": sorted(room.muted),
+                        "timeouts": {
+                            k: int((v - time.time()) * 1000)
+                            for k, v in room.timeouts.items()
+                            if v > time.time()
+                        },
+                        "jamEvent": entry,
+                        "peers": room.peer_list(),
+                    },
+                )
+
+            elif mtype == "report":
+                code = client_room.get(ws)
+                room = rooms.get(code) if code else None
+                if not room or ws not in room.clients:
+                    continue
+                reporter = room.names.get(ws, "player")
+                target = normalize_name(str(msg.get("target") or ""))
+                reason = " ".join(str(msg.get("reason") or "report").strip().split())[:120]
+                if not target:
+                    await send(ws, {"type": "error", "message": "pick someone to report"})
+                    continue
+                rep = {
+                    "by": reporter,
+                    "target": target,
+                    "reason": reason or "report",
+                    "ts": int(time.time() * 1000),
+                    "room": room.code,
+                }
+                room.reports.append(rep)
+                if len(room.reports) > 30:
+                    room.reports = room.reports[-30:]
+                entry = room.add_jam(f"{reporter} reported {target}", "mod")
+                # notify host + owner clients
+                note = {
+                    "type": "report",
+                    "report": rep,
+                    "jamEvent": entry,
+                }
+                for c in list(room.clients):
+                    if c is room.host or is_seven_name(room.names.get(c, "")):
+                        await send(c, note)
+                await send(ws, {"type": "admin_ok", "message": "Report sent to host", "action": "report"})
+
+            elif mtype == "queue_add":
+                code = client_room.get(ws)
+                room = rooms.get(code) if code else None
+                if not room or ws not in room.clients:
+                    continue
+                name = room.names.get(ws, "player")
+                if room.is_timed_out(name):
+                    await send(ws, {"type": "error", "message": "You're timed out"})
+                    continue
+                song = str(msg.get("song") or "")
+                if not song or len(song) > MAX_SONG_CHARS:
+                    await send(ws, {"type": "error", "message": "Can't queue empty/huge song"})
+                    continue
+                if len(room.song_queue) >= 12:
+                    await send(ws, {"type": "error", "message": "Queue full (12 max)"})
+                    continue
+                room._queue_seq += 1
+                title = " ".join(str(msg.get("title") or room.title or "song").strip().split())[:40]
+                item = {
+                    "id": room._queue_seq,
+                    "title": title or "song",
+                    "song": song,
+                    "by": name,
+                    "votes": {name.lower()},
+                    "ts": int(time.time() * 1000),
+                }
+                room.song_queue.append(item)
+                entry = room.add_jam(f"{name} queued \"{item['title']}\"", "queue")
+                await broadcast_room(
+                    room,
+                    {
+                        "type": "queue",
+                        "queue": room.queue_public(),
+                        "from": name,
+                        "jamEvent": entry,
+                    },
+                )
+
+            elif mtype == "queue_vote":
+                code = client_room.get(ws)
+                room = rooms.get(code) if code else None
+                if not room or ws not in room.clients:
+                    continue
+                name = room.names.get(ws, "player")
+                try:
+                    qid = int(msg.get("id") or 0)
+                except (TypeError, ValueError):
+                    qid = 0
+                item = next((x for x in room.song_queue if x.get("id") == qid), None)
+                if not item:
+                    await send(ws, {"type": "error", "message": "Song not in queue"})
+                    continue
+                votes = item.setdefault("votes", set())
+                low = name.lower()
+                if low in votes:
+                    votes.discard(low)
+                else:
+                    votes.add(low)
+                await broadcast_room(
+                    room,
+                    {"type": "queue", "queue": room.queue_public(), "from": name},
+                )
+
+            elif mtype == "queue_play":
+                # Host plays top-voted or specific id; loads into room song
+                code = client_room.get(ws)
+                room = rooms.get(code) if code else None
+                if not room or room.host is not ws:
+                    await send(ws, {"type": "error", "message": "only host can play queue"})
+                    continue
+                try:
+                    qid = int(msg.get("id") or 0)
+                except (TypeError, ValueError):
+                    qid = 0
+                if qid:
+                    item = next((x for x in room.song_queue if x.get("id") == qid), None)
+                else:
+                    # highest votes, then oldest
+                    item = None
+                    if room.song_queue:
+                        item = sorted(
+                            room.song_queue,
+                            key=lambda x: (-len(x.get("votes") or set()), x.get("ts") or 0),
+                        )[0]
+                if not item:
+                    await send(ws, {"type": "error", "message": "Queue empty"})
+                    continue
+                room.song_queue = [x for x in room.song_queue if x.get("id") != item["id"]]
+                room.song = item["song"]
+                room.song_ts = int(time.time() * 1000)
+                who = room.names.get(ws, "host")
+                entry = room.add_jam(f"{who} played queued \"{item.get('title')}\"", "queue")
+                await broadcast_room(
+                    room,
+                    {
+                        "type": "state",
+                        "song": room.song,
+                        "from": who,
+                        "role": "host",
+                        "ts": room.song_ts,
+                        "sig": song_sig(room.song),
+                        "bpm": room.bpm,
+                        "queuePlay": True,
+                        "queueTitle": item.get("title"),
+                    },
+                )
+                await broadcast_room(
+                    room,
+                    {
+                        "type": "queue",
+                        "queue": room.queue_public(),
+                        "from": who,
+                        "jamEvent": entry,
+                    },
+                )
+                await maybe_broadcast_lobby(room)
+
+            elif mtype == "queue_clear":
+                code = client_room.get(ws)
+                room = rooms.get(code) if code else None
+                if not room or room.host is not ws:
+                    await send(ws, {"type": "error", "message": "only host can clear queue"})
+                    continue
+                room.song_queue = []
+                who = room.names.get(ws, "host")
+                entry = room.add_jam(f"{who} cleared the song queue", "queue")
+                await broadcast_room(
+                    room,
+                    {"type": "queue", "queue": [], "from": who, "jamEvent": entry},
+                )
+
+            elif mtype == "ghost_get":
+                code = client_room.get(ws)
+                room = rooms.get(code) if code else None
+                if not room or ws not in room.clients:
+                    continue
+                # last ~45s of tape
+                tape = room.ghost_tape[-360:]
+                await send(
+                    ws,
+                    {
+                        "type": "ghost_tape",
+                        "tape": tape,
+                        "count": len(tape),
+                    },
+                )
 
             elif mtype == "typing":
                 code = client_room.get(ws)
@@ -1480,17 +1837,23 @@ async def process_request(connection: ServerConnection, request: Request) -> Res
     # Health / probes (Render, bots, uptime checkers)
     if path in ("/health", "/healthz", "/ready", "/ping"):
         st = presence_stats()
+        env_port = int(os.environ.get("PORT", "8765") or "8765")
+        try:
+            env_port = int(str(os.environ.get("PORT", "8765")).strip() or "8765")
+        except ValueError:
+            env_port = 8765
         body = json.dumps(
             {
                 "ok": True,
                 "app": "SevenBox",
-                "v": 6,
+                "v": 7,
                 "online": st["online"],
                 "inRooms": st["inRooms"],
                 "rooms": st["rooms"],
                 "public": st["public"],
                 "theme": SITE["theme"],
                 "lobby": public_lobby(),
+                "lan": lan_urls(env_port),
             }
         ).encode()
         headers = Headers(
