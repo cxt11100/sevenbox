@@ -17,6 +17,7 @@ import logging
 import mimetypes
 import os
 import random
+import re
 import sys
 import time
 import zlib
@@ -92,7 +93,12 @@ BLOCKED_NAMES = {
 
 
 def normalize_name(n: str) -> str:
+    # No multi-spaces; cap length. Tag names are compact (no spaces).
     return " ".join(str(n or "").strip().split())[:24]
+
+
+# nickname (letters/_ only, 2–12 chars) + 3–5 digits at end, e.g. chip482, melody9041
+NAME_TAG_RE = re.compile(r"^[A-Za-z][A-Za-z_]{1,11}\d{3,5}$")
 
 
 RANDOM_TITLES = (
@@ -134,6 +140,11 @@ def is_seven_name(n: str) -> bool:
     return s == "seven" or compact == "seven"
 
 
+def name_letter_prefix(n: str) -> str:
+    """Strip trailing digits used as uniqueness tag."""
+    return re.sub(r"\d+$", "", str(n or "")).lower().strip("_")
+
+
 def validate_player_name(n: str, key: str | None = None) -> tuple[bool, str]:
     n = normalize_name(n)
     if len(n) < 2:
@@ -142,14 +153,38 @@ def validate_player_name(n: str, key: str | None = None) -> tuple[bool, str]:
         if str(key or "") == SEVEN_KEY:
             return True, n
         return False, 'Name "seven" needs the special key.'
-    low = n.lower()
-    compact = "".join(ch for ch in low if ch.isalnum())
-    if low in BLOCKED_NAMES or compact in BLOCKED_NAMES:
+    # Regular players: nickname + 3–5 numbers (unique tag)
+    if " " in n:
+        return False, "No spaces — use nickname + 3–5 numbers (e.g. alex482)."
+    if not NAME_TAG_RE.match(n):
+        return (
+            False,
+            "Use a nickname + 3–5 numbers (e.g. chip482 or melody9041).",
+        )
+    prefix = name_letter_prefix(n)
+    compact = "".join(ch for ch in prefix if ch.isalnum())
+    if not prefix or len(prefix) < 2:
+        return False, "Nickname part too short — add more letters before the numbers."
+    if prefix in BLOCKED_NAMES or compact in BLOCKED_NAMES:
         return False, "That name sounds like staff/power. Pick another."
     for bit in ("administrator", "moderator", "sysadmin", "superuser", "sysop"):
         if bit in compact:
             return False, "That name sounds like staff/power. Pick another."
     return True, n
+
+
+def is_name_taken(name: str, except_ws: ServerConnection | None = None) -> bool:
+    """Case-insensitive uniqueness across all rooms on this host."""
+    want = normalize_name(name).lower()
+    if not want:
+        return False
+    for room in rooms.values():
+        for c, nm in room.names.items():
+            if except_ws is not None and c is except_ws:
+                continue
+            if str(nm).lower() == want:
+                return True
+    return False
 
 
 def normalize_code(raw: Any) -> str:
@@ -625,6 +660,15 @@ async def ws_handler(ws: ServerConnection) -> None:
                     await send(ws, {"type": "error", "message": name_or_err})
                     continue
                 name = name_or_err
+                if is_name_taken(name, except_ws=ws):
+                    await send(
+                        ws,
+                        {
+                            "type": "error",
+                            "message": "That name is already online. Change the numbers (e.g. alex483).",
+                        },
+                    )
+                    continue
                 # blank title → random fun name (not just "Untitled")
                 raw_title = " ".join(str(msg.get("title") or "").strip().split())
                 title = normalize_title(raw_title) if raw_title else random_room_title()
@@ -713,12 +757,16 @@ async def ws_handler(ws: ServerConnection) -> None:
                     continue
                 await leave(ws)
                 name = name_or_err
-                existing = set(room.names.values())
-                base = name
-                n = 2
-                while name in existing:
-                    name = f"{base}{n}"
-                    n += 1
+                # No auto-rename (bob → bob2). Names must be unique site-wide.
+                if is_name_taken(name, except_ws=ws):
+                    await send(
+                        ws,
+                        {
+                            "type": "error",
+                            "message": "That name is already online. Change the numbers (e.g. alex483).",
+                        },
+                    )
+                    continue
                 room.clients.add(ws)
                 room.names[ws] = name
                 room.roles[ws] = room.default_role

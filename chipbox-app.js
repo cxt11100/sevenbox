@@ -682,6 +682,9 @@ try {
     return "ws://127.0.0.1:8765/ws";
   }
 
+  // nickname (letters/_) + 3–5 digits at end, e.g. chip482 / melody9041
+  var NAME_TAG_RE = /^[A-Za-z][A-Za-z_]{1,11}\d{3,5}$/;
+
   function normalizeName(n) {
     return String(n || "").trim().replace(/\s+/g, " ").slice(0, 24);
   }
@@ -690,18 +693,21 @@ try {
     var compact = s.replace(/[^a-z0-9]/g, "");
     return s === "seven" || compact === "seven";
   }
+  function nameLetterPrefix(n) {
+    return String(n || "").replace(/\d+$/, "").toLowerCase().replace(/^_+|_+$/g, "");
+  }
   function nameIsPowerRole(n) {
     var s = normalizeName(n).toLowerCase();
     if (!s) return "empty";
-    var compact = s.replace(/[^a-z0-9]/g, "");
-    if (BLOCKED_EXACT[s] || BLOCKED_EXACT[compact]) return "power";
-    // exact blocked only for short power words; long phrases as substrings
+    var prefix = nameLetterPrefix(s);
+    var compact = prefix.replace(/[^a-z0-9]/g, "");
+    if (BLOCKED_EXACT[prefix] || BLOCKED_EXACT[compact] || BLOCKED_EXACT[s]) return "power";
     var badLong = ["administrator", "moderator", "sysadmin", "superuser", "sysop"];
     for (var i = 0; i < badLong.length; i++) {
       if (compact.indexOf(badLong[i]) >= 0) return "power";
     }
     if (s.length < 2) return "short";
-    if (/^[^a-zA-Z0-9]+$/.test(s)) return "symbols";
+    if (/^[^a-zA-Z0-9_]+$/.test(s)) return "symbols";
     return null;
   }
   function validateName(n, key) {
@@ -711,10 +717,23 @@ try {
       if (String(key || "") === SEVEN_KEY) return { ok: true };
       return { ok: false, needKey: true, message: "Name \"seven\" is reserved. Enter the special key." };
     }
+    if (/\s/.test(n)) {
+      return { ok: false, message: "No spaces — use nickname + 3–5 numbers (e.g. alex482)." };
+    }
+    if (!NAME_TAG_RE.test(n)) {
+      return {
+        ok: false,
+        message: "Use a nickname + 3–5 numbers (e.g. chip482 or melody9041)."
+      };
+    }
+    var prefix = nameLetterPrefix(n);
+    if (!prefix || prefix.length < 2) {
+      return { ok: false, message: "Nickname part too short — more letters before the numbers." };
+    }
     var bad = nameIsPowerRole(n);
     if (bad === "power") return { ok: false, message: "That name sounds like staff/power. Pick another." };
     if (bad === "short") return { ok: false, message: "Name too short." };
-    if (bad === "symbols") return { ok: false, message: "Use letters or numbers." };
+    if (bad === "symbols") return { ok: false, message: "Use letters then numbers." };
     return { ok: true };
   }
   function showGateErr(msg) {
@@ -788,7 +807,8 @@ try {
     var gateKey = document.getElementById("sb-gate-key");
     var saved = "";
     try { saved = localStorage.getItem(NAME_KEY) || ""; } catch (e) {}
-    if (saved && !nameIsPowerRole(saved) && !nameLooksLikeSeven(saved)) {
+    // Only auto-pass gate if saved name matches nickname+digits (or will re-prompt)
+    if (saved && !nameLooksLikeSeven(saved) && validateName(saved, "").ok) {
       setName(saved);
       if (gate) gate.classList.add("sb-hide");
     } else if (saved && nameLooksLikeSeven(saved)) {
@@ -799,6 +819,10 @@ try {
       showGateErr("Name \"seven\" needs the special key.");
     } else if (gate) {
       gate.classList.remove("sb-hide");
+      if (saved && !nameLooksLikeSeven(saved) && !validateName(saved, "").ok) {
+        if (gateInput) gateInput.value = saved;
+        showGateErr("Add 3–5 numbers to your nickname (e.g. " + (saved.replace(/\s+/g, "") || "you") + "482).");
+      }
     }
     function syncGo() {
       if (!gateGo || !gateInput) return;

@@ -137,7 +137,7 @@ async def main() -> int:
                     json.dumps(
                         {
                             "type": "create",
-                            "name": "Tester",
+                            "name": "Tester482",
                             "title": "AutoTest Public",
                             "public": True,
                             "song": "SONG_A",
@@ -162,7 +162,7 @@ async def main() -> int:
                     bad("public server appears in lobby", str(titles))
 
                 # join
-                await b.send(json.dumps({"type": "join", "name": "Buddy", "room": code}))
+                await b.send(json.dumps({"type": "join", "name": "Buddy904", "room": code}))
                 joined = await recv_until(b, {"joined", "error"})
                 if joined.get("type") == "joined" and joined.get("song") == "SONG_A":
                     ok("join receives song snapshot")
@@ -223,7 +223,7 @@ async def main() -> int:
                     json.dumps(
                         {
                             "type": "create",
-                            "name": "PrivHost",
+                            "name": "PrivHost101",
                             "title": "Secret Hideout",
                             "public": False,
                             "song": "PRIV",
@@ -240,7 +240,7 @@ async def main() -> int:
                         ok("private server hidden from lobby")
                     else:
                         bad("private server hidden from lobby")
-                    await d.send(json.dumps({"type": "join", "name": "Sneak", "room": pcode}))
+                    await d.send(json.dumps({"type": "join", "name": "Sneak777", "room": pcode}))
                     j = await recv_until(d, {"joined", "error"})
                     if j.get("type") == "joined":
                         ok("private join via code")
@@ -254,7 +254,7 @@ async def main() -> int:
                     json.dumps(
                         {
                             "type": "create",
-                            "name": "ViewHost",
+                            "name": "ViewHost202",
                             "title": "Watch Only",
                             "public": True,
                             "song": "V0",
@@ -265,7 +265,7 @@ async def main() -> int:
                 cr = await recv_until(h, "created")
                 async with connect(WS, open_timeout=5) as v:
                     await drain_hello(v)
-                    await v.send(json.dumps({"type": "join", "name": "Viewer", "room": cr["room"]}))
+                    await v.send(json.dumps({"type": "join", "name": "Viewer303", "room": cr["room"]}))
                     j = await recv_until(v, "joined")
                     if j.get("role") == "view":
                         ok("joiner gets view role")
