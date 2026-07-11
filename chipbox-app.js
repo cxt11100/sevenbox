@@ -926,9 +926,9 @@ try {
   var cursorRaf = 0;
   var cursorLayerSize = { w: 1, h: 1 };
   // How long to ease between two network points (ms). ~ packet interval.
-  var CURSOR_SEG_MS = 90;
+  var CURSOR_SEG_MS = 45;
   // Mild coast past last sample if next packet is late (fraction of seg)
-  var CURSOR_COAST = 0.35;
+  var CURSOR_COAST = 0.15;
 
   function measureCursorLayer() {
     // Use the VISIBLE editor box size (clientWidth), not scrollWidth — avoids huge right gap
@@ -1047,7 +1047,7 @@ try {
     cur.fromX = fx; cur.fromY = fy;
     cur.toX = nx; cur.toY = ny;
     cur.segStart = now;
-    cur.segMs = Math.max(55, Math.min(130, CURSOR_SEG_MS + dist * 80));
+    cur.segMs = Math.max(30, Math.min(70, CURSOR_SEG_MS + dist * 40));
   }
 
   function placeMouseCursor(t, name, myName, myCh, now) {
@@ -1131,302 +1131,13 @@ try {
     el.title = (name || "?") + " · track " + chN;
   }
 
-  function ensurePlayheadMark(name) {
-    var layer = ensurePresenceLayer();
-    if (!layer) return null;
-    var safe = String(name).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
-    var id = "sb-ph-" + safe;
-    var el = document.getElementById(id);
-    if (!el) {
-      el = document.createElement("div");
-      el.id = id;
-      el.className = "sb-playhead-mark is-ghost";
-      el.innerHTML =
-        '<div class="sb-ph-bar"></div>' +
-        '<div class="sb-ph-wash"></div>' +
-        '<span class="sb-ph-name"></span>';
-      layer.appendChild(el);
-    } else if (el.parentNode !== layer) {
-      layer.appendChild(el);
-    }
-    if (!el.querySelector(".sb-ph-bar") || !el.querySelector(".sb-ph-wash")) {
-      el.className = "sb-playhead-mark is-ghost";
-      el.innerHTML =
-        '<div class="sb-ph-bar"></div>' +
-        '<div class="sb-ph-wash"></div>' +
-        '<span class="sb-ph-name"></span>';
-    }
-    return el;
-  }
-
-  // Read BeepBox's real playhead color (often only defined under .beepboxEditor, not :root)
-  function getBeepBoxPlayheadColor() {
-    try {
-      var el =
-        document.querySelector(".beepboxEditor") ||
-        document.getElementById("beepboxEditorContainer") ||
-        document.documentElement;
-      var c = window.getComputedStyle(el).getPropertyValue("--playhead").trim();
-      if (c && c !== "initial" && c !== "inherit") return c;
-    } catch (e) {}
-    try {
-      var c2 = window.getComputedStyle(document.documentElement).getPropertyValue("--playhead").trim();
-      if (c2) return c2;
-    } catch (e2) {}
-    return "#ff4fd8"; // BeepBox dark classic default
-  }
-
-  // Viewport geometry: real playhead X + each channel row Y
-  var _phGeom = { t: 0, rows: null, h: 28, playX: 80, color: "#ff4fd8", stripTop: 0, stripBottom: 0 };
-
-  function refreshPlayheadGeom(force) {
-    var now = performance.now ? performance.now() : Date.now();
-    var box = document.getElementById("beepboxEditorContainer");
-    if (!box) return null;
-    var boxRect = box.getBoundingClientRect();
-    if (boxRect.width < 2 || boxRect.height < 2) return null;
-
-    var PH = 28;
-    var needRows = force || !_phGeom.rows || (now - _phGeom.t) > 80;
-    var rows = _phGeom.rows;
-
-    if (needRows) {
-      rows = [];
-      var mute = box.querySelector(".muteEditor");
-      var trackArea = box.querySelector(".trackAndMuteContainer");
-      if (mute && mute.children && mute.children.length) {
-        // children[i] === channel i (BeepBox mute column)
-        for (var i = 0; i < mute.children.length; i++) {
-          var br = mute.children[i].getBoundingClientRect();
-          rows[i] = {
-            top: br.top,
-            h: Math.max(16, Math.min(36, br.height > 8 ? br.height : PH))
-          };
-        }
-      }
-      if (!rows.length && trackArea) {
-        var tr = trackArea.getBoundingClientRect();
-        var nCh = 4;
-        try {
-          var d0 = doc();
-          if (d0 && d0.song && typeof d0.song.getChannelCount === "function") {
-            nCh = d0.song.getChannelCount() || 4;
-          }
-        } catch (e0) {}
-        for (var c = 0; c < nCh; c++) {
-          rows[c] = { top: tr.top + c * PH, h: PH };
-        }
-      }
-      if (!rows.length) {
-        var chRows = box.querySelectorAll(".channelRow");
-        for (var cr = 0; cr < chRows.length; cr++) {
-          var rr = chRows[cr].getBoundingClientRect();
-          rows[cr] = { top: rr.top, h: Math.max(16, rr.height || PH) };
-        }
-      }
-      // Bound pink line to track strip only — never through purple loop bar
-      var stripTop = rows.length ? rows[0].top : boxRect.top;
-      var stripBottom = rows.length
-        ? (rows[rows.length - 1].top + rows[rows.length - 1].h)
-        : boxRect.bottom;
-      if (trackArea) {
-        var trb = trackArea.getBoundingClientRect();
-        stripTop = Math.max(stripTop, trb.top);
-        stripBottom = Math.min(stripBottom, trb.bottom);
-      }
-      _phGeom.t = now;
-      _phGeom.rows = rows;
-      _phGeom.h = PH;
-      _phGeom.color = getBeepBoxPlayheadColor();
-      _phGeom.stripTop = stripTop;
-      _phGeom.stripBottom = stripBottom;
-    }
-
-    // X = BeepBox playhead (prefer track-area playhead over pattern-editor one)
-    var playX = null;
-    try {
-      var trackArea2 = box.querySelector(".trackAndMuteContainer");
-      var trackRect = trackArea2 ? trackArea2.getBoundingClientRect() : null;
-      var rects = box.querySelectorAll("svg rect");
-      var best = null;
-      for (var r = 0; r < rects.length; r++) {
-        var node = rects[r];
-        var rw = parseFloat(node.getAttribute("width") || "0");
-        var rh = parseFloat(node.getAttribute("height") || "0");
-        // BeepBox playhead is width 4
-        if (!(rw >= 3 && rw <= 5)) continue;
-        if (rh < PH * 0.5) continue;
-        var gr = node.getBoundingClientRect();
-        if (gr.width <= 0 || gr.height < 8) continue;
-        var midY = gr.top + gr.height * 0.5;
-        var inTrack = trackRect
-          ? (midY >= trackRect.top - 4 && midY <= trackRect.bottom + 4)
-          : true;
-        // Prefer short track playhead (channel strip) over tall pattern playhead
-        var score = (inTrack ? 20000 : 0) - Math.abs(gr.height - (rows.length || 4) * PH);
-        if (!best || score > best.score) {
-          best = { x: gr.left + gr.width * 0.5, score: score };
-        }
-      }
-      if (best) playX = best.x;
-    } catch (e1) {}
-
-    if (playX == null || isNaN(playX)) {
-      try {
-        var d = doc();
-        var ph = 0;
-        if (d && d.synth && typeof d.synth.playhead === "number") ph = d.synth.playhead;
-        else if (d && typeof d.bar === "number") ph = d.bar;
-        var mute2 = box.querySelector(".muteEditor");
-        var ta = box.querySelector(".trackAndMuteContainer");
-        var barW = 32;
-        var cells = box.querySelectorAll(".channelBox");
-        if (cells.length >= 2) {
-          var c0 = cells[0].getBoundingClientRect();
-          var c1 = cells[1].getBoundingClientRect();
-          if (c1.left > c0.left + 2) barW = c1.left - c0.left;
-        }
-        var left0 = ta ? ta.getBoundingClientRect().left : boxRect.left;
-        var muteW = mute2 ? mute2.getBoundingClientRect().width : 32;
-        playX = left0 + muteW + ph * barW;
-      } catch (e2) {
-        playX = boxRect.left + 100;
-      }
-    }
-
-    _phGeom.playX = playX;
-    _phGeom.color = getBeepBoxPlayheadColor();
-    return _phGeom;
-  }
-
-  // How many people (you + remotes) are on a given track right now
-  function countPlayersOnChannel(ch) {
-    ch = ch | 0;
-    var n = 0;
-    if ((currentChannel() | 0) === ch) n++;
-    var names = Object.keys(cursorTargets);
-    for (var i = 0; i < names.length; i++) {
-      var t = cursorTargets[names[i]];
-      if (!t) continue;
-      var c = (typeof t.channel === "number" && !isNaN(t.channel)) ? (t.channel | 0) : 0;
-      if (c === ch) n++;
-    }
-    return n;
-  }
-
-  function placePlayheadMark(t, name, myName, myCh) {
-    if (!t || !name) return;
-    // You already have BeepBox's real solid playhead — only draw for OTHER players
-    if (namesMatch(name, myName)) {
-      if (t.trackEl) {
-        t.trackEl.classList.remove("sb-on");
-        t.trackEl.style.display = "none";
-      }
-      return;
-    }
-    var chN = (typeof t.channel === "number" && !isNaN(t.channel)) ? (t.channel | 0) : 0;
-    if (chN < 0) chN = 0;
-
-    // As you asked: ghost when alone on that track; solid when 2+ share it
-    var solid = countPlayersOnChannel(chN) >= 2;
-
-    var g = refreshPlayheadGeom(false);
-    var el = t.trackEl || ensurePlayheadMark(name);
-    t.trackEl = el;
-    if (!el) return;
-
-    if (!g || !g.rows || !g.rows.length) {
-      el.classList.remove("sb-on");
-      el.style.display = "none";
-      return;
-    }
-
-    // Full-height pink line through TRACK GRID only (like BeepBox playhead),
-    // never through the purple loop bar under the tracks.
-    var fullTop = (typeof g.stripTop === "number") ? g.stripTop : g.rows[0].top;
-    var fullBottom = (typeof g.stripBottom === "number")
-      ? g.stripBottom
-      : (g.rows[g.rows.length - 1].top + g.rows[g.rows.length - 1].h);
-    var fullH = Math.max(40, fullBottom - fullTop);
-
-    var vh = window.innerHeight || 800;
-    if (fullBottom < -20 || fullTop > vh + 20) {
-      el.classList.remove("sb-on");
-      el.style.display = "none";
-      return;
-    }
-
-    var lane = 0;
-    var keys = Object.keys(cursorTargets).sort();
-    for (var i = 0; i < keys.length; i++) {
-      if (namesMatch(keys[i], myName)) continue;
-      if (namesMatch(keys[i], name)) break;
-      lane++;
-    }
-    var leftX = Math.round(g.playX) + lane * 5;
-    var phColor = g.color || getBeepBoxPlayheadColor();
-
-    el.classList.add("sb-on");
-    el.style.display = "block";
-    el.style.left = leftX + "px";
-    el.style.top = Math.round(fullTop) + "px";
-    el.style.width = "4px";
-    el.style.height = Math.round(fullH) + "px";
-    el.style.maxHeight = Math.round(fullH) + "px";
-    el.style.minHeight = Math.round(fullH) + "px";
-    el.style.overflow = "visible";
-
-    if (solid) {
-      el.classList.add("is-solid");
-      el.classList.remove("is-ghost");
-    } else {
-      el.classList.add("is-ghost");
-      el.classList.remove("is-solid");
-    }
-
-    var bar = el.querySelector(".sb-ph-bar");
-    if (bar) {
-      bar.style.background = phColor;
-      bar.style.height = "100%";
-      bar.style.width = "4px";
-      bar.style.opacity = solid ? "1" : "0.35";
-    }
-
-    // Name beside the line at THEIR track height (not covering pattern 1/0 boxes)
-    var row = g.rows[chN];
-    if (!row) {
-      row = { top: fullTop + chN * (g.h || 28), h: g.h || 28 };
-    }
-    var nameY = (row.top + (row.h || 28) * 0.5) - fullTop;
-
-    var nm = el.querySelector(".sb-ph-name");
-    if (nm) {
-      nm.textContent = name || "?";
-      nm.style.color = phColor;
-      nm.style.left = "auto";
-      nm.style.right = "6px";
-      nm.style.top = Math.round(nameY) + "px";
-      nm.style.transform = "translateY(-50%)";
-    }
-    el.title = (name || "?") + " · track " + chN +
-      (solid ? " · shared (solid pink)" : " · ghost pink");
-  }
-
-  var PH_TICK_MS = 33;
-  var lastPhTick = 0;
-
   function startCursorAnim() {
     if (cursorRaf) return;
     var tick = function (nowStamp) {
       cursorRaf = requestAnimationFrame(tick);
       if (!room) return;
       var now = nowStamp || (performance.now ? performance.now() : Date.now());
-      // cursors every frame; track marks ~30fps
-      var doTrack = (now - lastPhTick) >= PH_TICK_MS;
-      if (doTrack) lastPhTick = now;
-
       ensurePresenceLayer();
-      if (doTrack) refreshPlayheadGeom(false);
       var myCh = currentChannel();
       var myName = getName();
       var names = Object.keys(cursorTargets);
@@ -1435,7 +1146,6 @@ try {
         var t = cursorTargets[name];
         if (!t) continue;
         placeMouseCursor(t, name, myName, myCh, now);
-        if (doTrack) placePlayheadMark(t, name, myName, myCh);
       }
     };
     cursorRaf = requestAnimationFrame(tick);
@@ -1474,7 +1184,6 @@ try {
         cur = cursorTargets[p.name] = {
           channel: pCh,
           color: color,
-          trackEl: ensurePlayheadMark(p.name),
           el: ensureCursorEl(p.name, color),
           lastCh: pCh,
           fromX: nx != null ? nx : 0.5,
@@ -1493,7 +1202,6 @@ try {
         cur.channel = pCh;
         cur.color = color;
         cur.lastCh = pCh;
-        if (!cur.trackEl) cur.trackEl = ensurePlayheadMark(p.name);
         if (!cur.el) cur.el = ensureCursorEl(p.name, color);
         else cur.el.style.setProperty("--line", color);
         if (hasX && hasY) {
@@ -1512,7 +1220,6 @@ try {
       if (!live[name]) {
         try {
           var dead = cursorTargets[name];
-          if (dead.trackEl && dead.trackEl.parentNode) dead.trackEl.parentNode.removeChild(dead.trackEl);
           if (dead.el && dead.el.parentNode) dead.el.parentNode.removeChild(dead.el);
         } catch (e) {}
         delete cursorTargets[name];
@@ -2066,10 +1773,10 @@ try {
     } catch (e) {}
   }
 
-  // Channel changes = immediate; mouse cursors ~8 Hz (less glitch/spam)
+  // Snappy multiplayer cursors (~25 Hz when moving)
   var lastPresenceSent = 0;
   var presenceFlushTimer = null;
-  var PRESENCE_MIN_MS = 120;
+  var PRESENCE_MIN_MS = 40;
   var lastSentChannel = -999;
   var lastSentXY = { x: -1, y: -1 };
 
@@ -2099,10 +1806,10 @@ try {
     // skip tiny mouse noise when channel unchanged
     if (!force && ch === lastSentChannel && lastSentXY.x >= 0) {
       var md = Math.abs(x - lastSentXY.x) + Math.abs(y - lastSentXY.y);
-      if (md < 0.008 && inside && (now - lastPresenceSent) < 500) return;
+      if (md < 0.003 && inside && (now - lastPresenceSent) < 120) return;
     }
     var key = x + "," + y + "," + (inside ? 1 : 0) + "," + ch + "," + bar;
-    if (!force && key === lastPresenceKey && (now - lastPresenceSent) < 700) return;
+    if (!force && key === lastPresenceKey && (now - lastPresenceSent) < 200) return;
     lastPresenceKey = key;
     lastPresenceSent = now;
     lastSentChannel = ch;
@@ -2678,7 +2385,7 @@ try {
         if (s && s !== lastApplied) applySong(lastApplied, false, lastRemoteTs || Date.now());
       }
     }, 120);
-    presenceTimer = setInterval(function () { sendPresence(false); }, 500);
+    presenceTimer = setInterval(function () { sendPresence(false); }, 200);
     pingTimer = setInterval(function () {
       try {
         if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "ping" }));
