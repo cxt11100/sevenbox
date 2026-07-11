@@ -803,14 +803,27 @@ async def ws_handler(ws: ServerConnection) -> None:
                 if role == "view":
                     continue
                 restart = bool(msg.get("restart") or msg.get("snap"))
+                soft = bool(msg.get("soft"))
                 # Never persist restart on last_transport — heartbeats would re-fire it forever
+                try:
+                    ph = float(msg.get("playhead") or 0)
+                except (TypeError, ValueError):
+                    ph = 0.0
+                try:
+                    bar_i = int(msg.get("bar") or 0)
+                except (TypeError, ValueError):
+                    bar_i = 0
+                ts_ms = int(msg.get("ts") or time.time() * 1000)
                 room.last_transport = {
                     "playing": bool(msg.get("playing")),
-                    "bar": int(msg.get("bar") or 0),
-                    "playhead": float(msg.get("playhead") or 0),
+                    "bar": bar_i,
+                    "playhead": ph,
+                    "ts": ts_ms,
+                    "bpm": room.bpm,
                 }
                 if msg.get("bpm") is not None:
                     room.bpm = _clamp_bpm(msg.get("bpm"), room.bpm or 150)
+                    room.last_transport["bpm"] = room.bpm
                 await broadcast_room(
                     room,
                     {
@@ -819,13 +832,16 @@ async def ws_handler(ws: ServerConnection) -> None:
                         "bar": room.last_transport["bar"],
                         "playhead": room.last_transport["playhead"],
                         "restart": restart,
+                        "soft": soft,
                         "from": room.names.get(ws, "player"),
-                        "ts": int(msg.get("ts") or time.time() * 1000),
+                        "ts": ts_ms,
                         "bpm": room.bpm,
                     },
                     skip=ws,
                 )
-                await maybe_broadcast_lobby(room)
+                # soft playhead ticks don't need lobby refresh
+                if not soft:
+                    await maybe_broadcast_lobby(room)
 
             elif mtype == "set_default_role":
                 code = client_room.get(ws)
@@ -983,7 +999,15 @@ async def ws_handler(ws: ServerConnection) -> None:
                 )
 
             elif mtype == "ping":
-                await send(ws, {"type": "pong", "t": time.time()})
+                # Echo client t for RTT; include serverMs for optional clock skew
+                await send(
+                    ws,
+                    {
+                        "type": "pong",
+                        "t": msg.get("t"),
+                        "serverMs": int(time.time() * 1000),
+                    },
+                )
 
             elif mtype == "leave":
                 await leave(ws)
@@ -1373,13 +1397,15 @@ async def room_heartbeat_loop() -> None:
             if room._hb_tick % 10 == 0 and room.song:
                 payload["song"] = room.song
                 payload["songTs"] = room.song_ts
-            # Never include restart flags in heartbeat transport
+            # Never include restart flags in heartbeat transport; keep playhead + ts for soft align
             tr = payload.get("transport") or {}
-            if isinstance(tr, dict) and tr.get("restart"):
+            if isinstance(tr, dict):
                 payload["transport"] = {
                     "playing": bool(tr.get("playing")),
                     "bar": int(tr.get("bar") or 0),
                     "playhead": float(tr.get("playhead") or 0),
+                    "ts": int(tr.get("ts") or now),
+                    "bpm": int(tr.get("bpm") or room.bpm or 150),
                 }
             raw = json.dumps(payload, separators=(",", ":"))
             dead = []

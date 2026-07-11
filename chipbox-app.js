@@ -160,6 +160,9 @@ try {
   var lastTransportTs = 0;       // ignore out-of-order play/stop
   var transportHoldUntil = 0;    // after apply, ignore spam briefly
   var pendingTransportTimer = null;
+  var lastRttMs = 80;            // estimated WS RTT for playhead lag compensation
+  var lastPlayheadSyncSent = 0;  // host soft playhead broadcast while playing
+  var lastSoftSeekAt = 0;        // rate-limit mid-play seeks (avoid jump spam)
   var pollTimer = null;
   var presenceTimer = null;
   var pingTimer = null;
@@ -1463,6 +1466,25 @@ try {
     return 150;
   }
 
+  function currentBeatsPerBar() {
+    try {
+      var d = doc();
+      if (d && d.song && typeof d.song.beatsPerBar === "number" && d.song.beatsPerBar > 0) {
+        return d.song.beatsPerBar | 0;
+      }
+    } catch (e) {}
+    return 4;
+  }
+
+  /** BeepBox playhead units = bars. bars advanced per millisecond at bpm. */
+  function barsPerMs(bpm) {
+    bpm = (bpm != null && !isNaN(+bpm)) ? +bpm : currentBpm();
+    if (bpm < 30) bpm = 30;
+    if (bpm > 500) bpm = 500;
+    var bpb = currentBeatsPerBar();
+    return (bpm / 60 / bpb) / 1000;
+  }
+
   function getTransport() {
     try {
       var d = doc();
@@ -1509,6 +1531,83 @@ try {
     try { if (typeof d.bar === "number") d.bar = bar; } catch (e1) {}
   }
 
+  function seekPlayhead(d, ph) {
+    if (!d || !d.synth) return;
+    ph = +ph;
+    if (isNaN(ph) || ph < 0) ph = 0;
+    try {
+      var maxBars = 0;
+      try {
+        if (d.song && typeof d.song.barCount === "number") maxBars = d.song.barCount;
+      } catch (eM) {}
+      if (maxBars > 0 && ph > maxBars) ph = ph % maxBars;
+      if ("playhead" in d.synth) d.synth.playhead = ph;
+      else if ("playheadInternal" in d.synth) d.synth.playheadInternal = ph;
+      else {
+        snapTransportToBar(d, Math.floor(ph) | 0);
+        return;
+      }
+      try {
+        if (typeof d.bar === "number") d.bar = Math.floor(ph) | 0;
+      } catch (eB) {}
+      try {
+        if (d.notifier && d.notifier.changed) d.notifier.changed();
+      } catch (eN) {}
+    } catch (e) {}
+  }
+
+  /**
+   * Advance stamped playhead by packet age (minus one-way lag estimate).
+   * Keeps remote play start closer to the sender's current beat.
+   */
+  function expectedPlayhead(msg, now) {
+    var ph = msg.playhead != null ? +msg.playhead : (msg.bar != null ? +msg.bar : 0);
+    if (isNaN(ph)) ph = 0;
+    if (!msg.playing) return ph;
+    var msgTs = msg.ts ? +msg.ts : 0;
+    if (!msgTs) return ph;
+    var oneWay = Math.min(150, Math.max(0, lastRttMs * 0.5));
+    var age = now - msgTs - oneWay;
+    if (age < 0) age = 0;
+    if (age > 2000) age = 2000; // bad clock skew / stale — don't jump ahead whole song
+    var bpm = msg.bpm != null && !isNaN(+msg.bpm) ? +msg.bpm : currentBpm();
+    return ph + age * barsPerMs(bpm);
+  }
+
+  /** Mid-play nudge only when drift is clearly audible — not every packet. */
+  function maybeSoftSeekPlayhead(msg, now) {
+    if (!msg || !msg.playing || localInteract || applyingRemote) return;
+    if (now - lastSoftSeekAt < 1400) return;
+    var d = doc();
+    if (!d || !d.synth || !d.synth.playing) return;
+    var localPh = 0;
+    try {
+      localPh = typeof d.synth.playhead === "number" ? d.synth.playhead : 0;
+    } catch (e) {
+      return;
+    }
+    var target = expectedPlayhead(msg, now);
+    var drift = Math.abs(localPh - target);
+    // ~0.12 bars ≈ a 16th–8th depending on time sig — ignore smaller wobble
+    if (drift < 0.12) return;
+    // huge gap (tab sleep / rejoin): still OK to snap once
+    if (drift > 8) {
+      // cap: just land on target, don't chase loops weirdly
+    }
+    lastSoftSeekAt = now;
+    applyingTransport = true;
+    try {
+      seekPlayhead(d, target);
+      try {
+        if (typeof editor !== "undefined" && editor && typeof editor.updatePlayButton === "function") {
+          editor.updatePlayButton();
+        }
+      } catch (e2) {}
+    } finally {
+      setTimeout(function () { applyingTransport = false; }, 50);
+    }
+  }
+
   function startLocalPlay(d) {
     resumeAllAudio();
     try {
@@ -1531,16 +1630,17 @@ try {
     if (!msg) return;
     var now = Date.now();
     var msgTs = msg.ts ? +msg.ts : 0;
-    // Drop stale / out-of-order packets
-    if (msgTs && lastTransportTs && msgTs < lastTransportTs - 5) return;
-    if (!force && now < transportHoldUntil && msgTs && msgTs <= lastTransportTs) return;
+    var isSoft = !!msg.soft || force === "soft";
+    // Drop stale / out-of-order packets (soft may share ts window — allow if soft)
+    if (!isSoft && msgTs && lastTransportTs && msgTs < lastTransportTs - 5) return;
+    if (!force && !isSoft && now < transportHoldUntil && msgTs && msgTs <= lastTransportTs) return;
 
     var wantPlayEarly = !!msg.playing;
     var dEarly = doc();
     var isPlayingEarly = dEarly && dEarly.synth ? !!dEarly.synth.playing : false;
     var isEdge = wantPlayEarly !== isPlayingEarly;
     var isRestart = !!(msg.restart || msg.snap || force === "restart");
-    if (localInteract && !force && !isEdge && !isRestart) return;
+    if (localInteract && !force && !isEdge && !isRestart && !isSoft) return;
     var d = doc();
     if (!d || !d.synth) return;
 
@@ -1548,10 +1648,13 @@ try {
     var isPlaying = !!d.synth.playing;
     var bar = msg.bar != null ? (msg.bar|0) : 0;
 
-    // Same play state → NEVER seek (this was randomly sending people to bar 1)
+    // Same play state → optional soft playhead align (not hard bar-0 seek)
     if (!isRestart && wantPlay === isPlaying) {
       if (msgTs) lastTransportTs = Math.max(lastTransportTs, msgTs);
       lastPlayingSent = wantPlay;
+      if (wantPlay && isPlaying && (isSoft || force === true)) {
+        maybeSoftSeekPlayhead(msg, now);
+      }
       return;
     }
 
@@ -1559,12 +1662,16 @@ try {
     if (msgTs) lastTransportTs = Math.max(lastTransportTs, msgTs);
     else lastTransportTs = now;
     lastPlayingSent = wantPlay;
-    if (isEdge || isRestart) transportHoldUntil = now + 280;
+    if (isEdge || isRestart) transportHoldUntil = now + 180;
 
     try {
       if (isRestart) {
         resumeAllAudio();
-        snapTransportToBar(d, bar|0);
+        if (msg.playhead != null && !isNaN(+msg.playhead)) {
+          seekPlayhead(d, expectedPlayhead(msg, now));
+        } else {
+          snapTransportToBar(d, bar|0);
+        }
         if (wantPlay) {
           if (!isPlaying) startLocalPlay(d);
           else {
@@ -1572,12 +1679,17 @@ try {
           }
         } else if (isPlaying) {
           stopLocalPlay(d);
-          snapTransportToBar(d, bar|0);
+          if (msg.playhead != null && !isNaN(+msg.playhead)) seekPlayhead(d, +msg.playhead);
+          else snapTransportToBar(d, bar|0);
         }
       } else if (wantPlay && !isPlaying) {
-        // Play edge only: start from the bar the host was on (not always 0)
+        // Play edge: land on lag-compensated playhead, then start
         resumeAllAudio();
-        if (msg.bar != null) snapTransportToBar(d, bar);
+        if (msg.playhead != null && !isNaN(+msg.playhead)) {
+          seekPlayhead(d, expectedPlayhead(msg, now));
+        } else if (msg.bar != null) {
+          snapTransportToBar(d, bar);
+        }
         startLocalPlay(d);
       } else if (!wantPlay && isPlaying) {
         // Stop edge only: freeze where you are — do NOT goToBar(0)
@@ -1598,39 +1710,61 @@ try {
   function sendTransport(force, opts) {
     opts = opts || {};
     if (!room) return;
-    if (applyingTransport && !opts.restart) return;
+    if (applyingTransport && !opts.restart && !opts.soft) return;
     if (!canEdit()) return;
     var t = getTransport();
     if (!t) return;
     var restart = !!opts.restart;
+    var soft = !!opts.soft;
     var bar = opts.bar != null ? (opts.bar|0) : t.bar;
     var playing = opts.playing != null ? !!opts.playing : t.playing;
-    // skip duplicate play state (restart always allowed)
-    if (!force && !restart && lastPlayingSent !== null && lastPlayingSent === playing) {
+    var playhead = opts.playhead != null ? +opts.playhead : (t.playhead != null ? t.playhead : bar);
+    // skip duplicate play state (restart / soft always allowed)
+    if (!force && !restart && !soft && lastPlayingSent !== null && lastPlayingSent === playing) {
       return;
     }
-    if (force && !restart && lastPlayingSent !== null && lastPlayingSent === playing && !opts.allowDup) {
+    if (force && !restart && !soft && lastPlayingSent !== null && lastPlayingSent === playing && !opts.allowDup) {
       return;
     }
-    lastPlayingSent = playing;
+    if (!soft) lastPlayingSent = playing;
     var ts = Date.now();
-    lastTransportTs = Math.max(lastTransportTs, ts);
+    if (!soft) lastTransportTs = Math.max(lastTransportTs, ts);
     var tpayload = {
       type: "transport",
       playing: playing,
       bar: bar,
-      playhead: t.playhead != null ? t.playhead : bar,
+      playhead: playhead,
       bpm: t.bpm != null ? t.bpm : currentBpm(),
       restart: restart,
+      soft: soft,
       room: room,
       tabId: tabId,
       ts: ts,
-      urgent: true
+      urgent: !soft
     };
     try {
       if (ws && ws.readyState === 1) ws.send(JSON.stringify(tpayload));
     } catch (e) {}
     try { if (bc) bc.postMessage(tpayload); } catch (e2) {}
+  }
+
+  /** While playing, host occasionally broadcasts playhead so peers can soft-align */
+  function maybeSendPlayheadSync() {
+    if (!room || !canEdit() || applyingTransport || localInteract) return;
+    // Prefer host as timing authority; if no host flag, any editor is fine
+    if (!isHost && myRole !== "host") return;
+    var t = getTransport();
+    if (!t || !t.playing) return;
+    var now = Date.now();
+    if (now - lastPlayheadSyncSent < 1500) return;
+    lastPlayheadSyncSent = now;
+    sendTransport(true, {
+      soft: true,
+      playing: true,
+      bar: t.bar,
+      playhead: t.playhead,
+      allowDup: true
+    });
   }
 
   /** After BeepBox toggles play, send ONE authoritative state (no multi-blast flicker) */
@@ -1643,8 +1777,13 @@ try {
       if (applyingTransport) return;
       var t = getTransport();
       if (!t) return;
-      sendTransport(true, { playing: t.playing, bar: t.bar, allowDup: true });
-    }, 40);
+      sendTransport(true, {
+        playing: t.playing,
+        bar: t.bar,
+        playhead: t.playhead,
+        allowDup: true
+      });
+    }, 16);
   }
 
   /** Host restart (Ctrl+F / F) — one clean restart packet, not a burst of play/stop */
@@ -2437,6 +2576,7 @@ try {
     // Backup poll — keep light to avoid thrash / playhead jumps
     pollTimer = setInterval(function () {
       watchPlayEdge();
+      maybeSendPlayheadSync();
       // channel switch → push presence + refresh same-ch chips/cursors
       var chNow = currentChannel();
       if (chNow !== lastLocalChannel) {
@@ -2456,9 +2596,11 @@ try {
     presenceTimer = setInterval(function () { sendPresence(false); }, 200);
     pingTimer = setInterval(function () {
       try {
-        if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "ping" }));
+        if (ws && ws.readyState === 1) {
+          ws.send(JSON.stringify({ type: "ping", t: Date.now() }));
+        }
       } catch (e) {}
-    }, 25000);
+    }, 8000);
     enableGhostChannels();
     lastLocalChannel = currentChannel();
     sendPresence(true);
@@ -2629,9 +2771,23 @@ try {
           var d = doc();
           var want = !!msg.transport.playing;
           var cur = d && d.synth ? !!d.synth.playing : false;
-          // play edge only — applyTransport no longer seeks on same-state / stop
+          // play edge, or soft mid-play align if both already playing
           if (want !== cur) applyTransport(msg.transport, false);
-          else if (want && cur) resumeAllAudio();
+          else if (want && cur) {
+            resumeAllAudio();
+            var softHb = msg.transport;
+            if (softHb && softHb.playhead != null) {
+              softHb = {
+                playing: true,
+                bar: softHb.bar,
+                playhead: softHb.playhead,
+                bpm: softHb.bpm != null ? softHb.bpm : msg.bpm,
+                ts: softHb.ts || msg.ts,
+                soft: true
+              };
+              maybeSoftSeekPlayhead(softHb, Date.now());
+            }
+          }
         } catch (e) {}
       }
       if (msg.peers) {
@@ -2707,6 +2863,14 @@ try {
         isHost ? "You're the host now" : ("Permissions updated — you are <b>" + myRole + "</b>"),
         "on"
       );
+    } else if (msg.type === "pong") {
+      // RTT for playhead lag compensation (echo of our ping t)
+      if (msg.t != null && !isNaN(+msg.t)) {
+        var rtt = Date.now() - (+msg.t);
+        if (rtt >= 0 && rtt < 2000) {
+          lastRttMs = lastRttMs * 0.6 + rtt * 0.4;
+        }
+      }
     } else if (msg.type === "error") {
       var em = msg.message || "error";
       setStatus(em, "err");
