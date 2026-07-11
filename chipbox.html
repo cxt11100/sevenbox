@@ -858,6 +858,24 @@ body {
   background: rgba(255,255,255,0.12);
   color: inherit;
 }
+/* BeepBox track color (replaces "track N" text) */
+.sb-peer-chip .ch-swatch {
+  width: 16px;
+  height: 12px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+.sb-peer-chip .ch-claim {
+  font: 700 9px/1 system-ui, sans-serif;
+  color: #888;
+  max-width: 56px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 /* Same channel as you — highlight, not fade */
 .sb-peer-chip.ghost-same {
   opacity: 1;
@@ -871,8 +889,13 @@ body {
   background: rgba(109,255,168,0.35);
   color: #e8fff2;
 }
+.sb-peer-chip.ghost-same .ch-swatch {
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.35),
+    0 0 0 2px rgba(109, 255, 168, 0.55);
+}
 .sb-peer-chip.ghost-same::after {
-  content: " same ch";
+  content: " same";
   font-weight: 800;
   font-size: 9px;
   opacity: 0.9;
@@ -2273,7 +2296,7 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
 
   // Native script load — Safari handles this much better than fetch+eval
   var s = document.createElement("script");
-  s.src = "chipbox-app.js?v=mp53";
+  s.src = "chipbox-app.js?v=mp54";
   s.async = false;
   s.onload = function () {
     setMsg("Engine loaded — starting…");

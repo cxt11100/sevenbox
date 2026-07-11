@@ -139,6 +139,28 @@ try {
     }
     return PEER_COLORS[i];
   }
+  // Classic BeepBox-ish fallbacks when ColorConfig isn't ready yet
+  var TRACK_COLOR_FALLBACK = [
+    "#25f3ff", "#ff9752", "#ff00bd", "#ffee55", "#99ee55",
+    "#bb55ee", "#ee5555", "#55ee99", "#5599ee", "#ee9955"
+  ];
+  /** CSS color for a BeepBox track index (matches editor channel color). */
+  function trackColorFor(ch) {
+    ch = ch | 0;
+    if (ch < 0) ch = 0;
+    try {
+      var d = doc();
+      if (d && d.song && typeof beepbox !== "undefined" && beepbox.ColorConfig &&
+          typeof beepbox.ColorConfig.getChannelColor === "function") {
+        var c = beepbox.ColorConfig.getChannelColor(d.song, ch);
+        if (c) {
+          return c.primaryChannel || c.primaryNote || c.secondaryChannel || c.secondaryNote ||
+            TRACK_COLOR_FALLBACK[ch % TRACK_COLOR_FALLBACK.length];
+        }
+      }
+    } catch (e) {}
+    return TRACK_COLOR_FALLBACK[ch % TRACK_COLOR_FALLBACK.length];
+  }
   var BLOCKED_EXACT = {
     admin:1, administrator:1, host:1, owner:1, root:1, mod:1, moderator:1,
     sysadmin:1, system:1, staff:1, op:1, operator:1, superuser:1, sudo:1,
@@ -2453,15 +2475,18 @@ try {
           (isOwner ? " owner" : "");
         if (same) chip.classList.add("ghost-same");
         var color = isOwner ? "#f0d78c" : peerColorFor(p.name, i);
+        var trCol = trackColorFor(chNum);
         var st = (p.status || "edit").toLowerCase();
         var stIcon = st === "listen" ? "🎧" : (st === "afk" ? "💤" : "✏️");
         var claim = trackOwners[String(chNum)] || trackOwners[chNum];
         var roleLabel = isOwner ? "OWNER" : (p.isHost ? "host" : role);
-        // Clear labels: name · track N · role (not a bare number)
+        // Name · track color swatch (BeepBox channel color) · role
         chip.innerHTML =
           '<span class="dot" style="background:' + color + '"></span>' +
           '<span class="nm">' + escapeHtml(stIcon + " " + (p.name || "?")) + "</span>" +
-          '<span class="ch-badge">track ' + chNum + (claim ? " · " + escapeHtml(String(claim)) : "") + "</span>" +
+          '<span class="ch-swatch" style="background:' + trCol + '" title="Track ' + chNum +
+            (claim ? " · claimed by " + escapeHtml(String(claim)) : "") + '"></span>' +
+          (claim ? '<span class="ch-claim" title="Track claim">' + escapeHtml(String(claim)) + "</span>" : "") +
           '<span class="role">' + escapeHtml(roleLabel) + "</span>";
         chip.title = isOwner
           ? (p.name || "seven") + " — OWNER · track " + chNum + " · " + st
