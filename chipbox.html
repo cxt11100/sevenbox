@@ -451,141 +451,52 @@ body {
   overflow: hidden;
   box-sizing: border-box;
 }
-/* Simple multiplayer mouse cursor (other players only) */
-.sb-remote-cursor {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 0;
-  height: 0;
-  pointer-events: none;
-  z-index: 42;
-  --line: #ff5ec8;
-  transform: translate(-1px, -1px);
-}
-.sb-remote-cursor .sb-cur-arrow {
-  width: 0;
-  height: 0;
-  border-style: solid;
-  border-width: 0 0 16px 12px;
-  border-color: transparent transparent transparent var(--line);
-  filter: drop-shadow(0 0 1px #000) drop-shadow(1px 1px 0 rgba(0,0,0,0.85));
-}
-.sb-remote-cursor .sb-cur-label {
-  position: absolute;
-  left: 14px;
-  top: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 1px 5px;
-  border-radius: 4px;
-  font: 800 10px/1.2 system-ui, -apple-system, "Segoe UI", sans-serif;
-  color: #1a1020;
-  background: var(--line);
-  white-space: nowrap;
-  max-width: 110px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
-}
-.sb-remote-cursor .sb-cur-label .sb-cur-name {
-  max-width: 64px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.sb-remote-cursor .sb-cur-label .sb-cur-ch {
-  font: 800 9px/1 system-ui, sans-serif;
-  padding: 2px 4px;
-  border-radius: 3px;
-  background: rgba(0,0,0,0.22);
-  color: #fff;
-}
-.sb-remote-cursor.same-ch { opacity: 0.7; }
-.sb-remote-cursor.dim-ch { opacity: 0.95; }
+/* No multiplayer mouse arrows — presence is BeepBox playhead-style only */
+.sb-remote-cursor { display: none !important; }
+
 /*
- * Track mark = thin vertical pink line on THAT player's channel only.
- * Fixed at left of track grid (not glued to shared playhead / not following others).
+ * Remote player mark = same pink as BeepBox's --playhead (width 4px rect).
+ * Sits on that player's channel row at the playhead X; name top-left.
+ * Same channel as you → ghost (faded), not a second solid pink.
  */
-.sb-track-line {
+.sb-playhead-mark {
   position: absolute;
-  width: 3px;
-  height: 24px;
-  margin-left: -1px;
+  width: 4px; /* BeepBox playhead rect width */
+  margin-left: -2px;
   pointer-events: none;
   z-index: 41;
   box-sizing: border-box;
-  --line: #ff5ec8;
   border: none;
-  border-radius: 2px;
-  opacity: 0.95;
-  background: var(--line);
-  box-shadow: 0 0 8px var(--line), 0 0 2px #fff;
-  will-change: transform;
-  transition: top 0.08s linear, left 0.08s linear;
+  border-radius: 0;
+  /* MUST use BeepBox theme playhead — not a custom pink */
+  background: var(--playhead, #ff4fd8);
+  opacity: 1;
 }
-.sb-track-line::before {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: -5px;
-  width: 0;
-  height: 0;
-  margin-left: -4px;
-  border-left: 4px solid transparent;
-  border-right: 4px solid transparent;
-  border-bottom: 5px solid var(--line);
-  filter: drop-shadow(0 0 3px var(--line));
+.sb-playhead-mark.same-ch {
+  /* ghost when both on the same channel */
+  opacity: 0.28;
+  background: var(--playhead, #ff4fd8);
 }
-.sb-track-line .sb-track-tag {
+.sb-playhead-mark.dim-ch {
+  opacity: 1;
+}
+.sb-playhead-mark .sb-ph-name {
   position: absolute;
-  left: 50%;
-  bottom: 100%;
-  transform: translate(-50%, -7px);
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 1px 5px;
-  border-radius: 4px;
-  font: 800 9px/1.2 system-ui, -apple-system, "Segoe UI", sans-serif;
-  color: #1a1020;
-  background: var(--line);
+  left: 0;
+  top: 0;
+  transform: translate(0, -100%);
+  padding: 0 0 1px 0;
+  font: 800 10px/1.15 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--playhead, #ff4fd8);
   white-space: nowrap;
-  max-width: 100px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
-}
-.sb-track-line .sb-track-tag .sb-cur-name {
-  max-width: 56px;
+  max-width: 90px;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-shadow: 0 0 4px #000, 0 1px 2px #000;
+  pointer-events: none;
 }
-.sb-track-line .sb-track-tag .sb-cur-ch {
-  font: 800 9px/1 system-ui, sans-serif;
-  padding: 2px 4px;
-  border-radius: 3px;
-  background: rgba(0,0,0,0.22);
-  color: #fff;
-}
-@keyframes sb-ghost-track {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 0.65; }
-}
-.sb-track-line.same-ch {
-  opacity: 0.5;
-  animation: sb-ghost-track 2.4s ease-in-out infinite;
-  filter: saturate(0.8);
-}
-.sb-track-line.same-ch .sb-track-tag {
-  color: var(--line);
-  background: rgba(10, 6, 14, 0.7);
-  border: 1px solid var(--line);
-}
-.sb-track-line.dim-ch {
-  opacity: 0.95;
-  filter: none;
-  animation: none;
-}
-@media (prefers-reduced-motion: reduce) {
-  .sb-track-line { transition: none; }
-  .sb-track-line.same-ch { animation: none; opacity: 0.45; }
+.sb-playhead-mark.same-ch .sb-ph-name {
+  opacity: 0.75;
 }
 
 #sb-sync-pill {
@@ -1890,7 +1801,7 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
 
   // Native script load — Safari handles this much better than fetch+eval
   var s = document.createElement("script");
-  s.src = "chipbox-app.js?v=mp33";
+  s.src = "chipbox-app.js?v=mp34";
   s.async = false;
   s.onload = function () {
     setMsg("Engine loaded — starting…");
