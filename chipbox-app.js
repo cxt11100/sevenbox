@@ -1282,9 +1282,24 @@ try {
     return _phGeom;
   }
 
+  // How many people (you + remotes) are on a given track right now
+  function countPlayersOnChannel(ch) {
+    ch = ch | 0;
+    var n = 0;
+    if ((currentChannel() | 0) === ch) n++;
+    var names = Object.keys(cursorTargets);
+    for (var i = 0; i < names.length; i++) {
+      var t = cursorTargets[names[i]];
+      if (!t) continue;
+      var c = (typeof t.channel === "number" && !isNaN(t.channel)) ? (t.channel | 0) : 0;
+      if (c === ch) n++;
+    }
+    return n;
+  }
+
   function placePlayheadMark(t, name, myName, myCh) {
     if (!t || !name) return;
-    // Never draw your own mark (BeepBox already shows your real full-height playhead)
+    // Never draw your own mark — BeepBox already draws YOUR solid playhead
     if (namesMatch(name, myName)) {
       if (t.trackEl) {
         t.trackEl.classList.remove("sb-on");
@@ -1294,10 +1309,39 @@ try {
     }
     var chN = (typeof t.channel === "number" && !isNaN(t.channel)) ? (t.channel | 0) : 0;
     if (chN < 0) chN = 0;
-    var same = chN === (myCh | 0);
 
-    // Always refresh row Y (channel change) + playhead X (moves when playing)
-    var g = refreshPlayheadGeom(true);
+    // Ghost if they're the only one on that track; solid pink if 2+ share it
+    var onCh = countPlayersOnChannel(chN);
+    var solid = onCh >= 2;
+
+    var g = refreshPlayheadGeom(false);
+    // refresh X every time (playhead moves); rows cache inside refresh
+    g = refreshPlayheadGeom(false);
+    // force playhead X update each call
+    try {
+      var box = document.getElementById("beepboxEditorContainer");
+      if (box) {
+        var d = doc();
+        if (d && d.synth && typeof d.synth.playhead === "number") {
+          var ta = box.querySelector(".trackAndMuteContainer");
+          var mute2 = box.querySelector(".muteEditor");
+          var barW = 32;
+          var cells = box.querySelectorAll(".channelBox");
+          if (cells.length >= 2) {
+            var c0 = cells[0].getBoundingClientRect();
+            var c1 = cells[1].getBoundingClientRect();
+            if (c1.left > c0.left + 2) barW = c1.left - c0.left;
+          }
+          var left0 = ta ? ta.getBoundingClientRect().left : box.getBoundingClientRect().left;
+          var muteW = mute2 ? mute2.getBoundingClientRect().width : 32;
+          // prefer live SVG playhead if refresh found one
+          if (g && (g.playX == null || isNaN(g.playX))) {
+            g.playX = left0 + muteW + d.synth.playhead * barW;
+          }
+        }
+      }
+    } catch (ePh) {}
+
     var el = t.trackEl || ensurePlayheadMark(name);
     t.trackEl = el;
     if (!el) return;
@@ -1329,12 +1373,11 @@ try {
     }
 
     var phColor = g.color || getBeepBoxPlayheadColor();
-    // ONE channel row only — never full-height (that was blending into BeepBox's real playhead)
-    var barH = Math.max(20, Math.min(32, (row.h | 0) || 26));
+    // ONE track row high — original BeepBox pink playhead style (4px)
+    var barH = Math.max(22, Math.min(30, (row.h | 0) || 26));
 
     el.classList.add("sb-on");
     el.style.display = "block";
-    // Align to BeepBox playhead column (moves when you press Play)
     el.style.left = Math.round(g.playX) + "px";
     el.style.top = Math.round(row.top) + "px";
     el.style.width = "4px";
@@ -1343,27 +1386,29 @@ try {
     el.style.minHeight = barH + "px";
     el.style.overflow = "visible";
 
+    if (solid) {
+      el.classList.add("is-solid");
+      el.classList.remove("is-ghost");
+    } else {
+      el.classList.add("is-ghost");
+      el.classList.remove("is-solid");
+    }
+    // legacy classes
+    el.classList.remove("same-ch", "dim-ch");
+
     var bar = el.querySelector(".sb-ph-bar");
     if (bar) {
       bar.style.background = phColor;
-      bar.style.height = barH + "px";
+      bar.style.height = "100%";
       bar.style.width = "4px";
-      bar.style.opacity = same ? "0.28" : "1";
-    }
-
-    if (same) {
-      el.classList.add("same-ch");
-      el.classList.remove("dim-ch");
-    } else {
-      el.classList.remove("same-ch");
-      el.classList.add("dim-ch");
+      bar.style.opacity = solid ? "1" : "0.32";
     }
 
     var nm = el.querySelector(".sb-ph-name");
     if (nm) {
       nm.textContent = name || "?";
       nm.style.color = phColor;
-      // name sits on the channel row, just right of the short bar (not floating above the whole grid)
+      // top-left of THIS channel's pink segment
       var stack = 0;
       var keys = Object.keys(cursorTargets);
       for (var i = 0; i < keys.length; i++) {
@@ -1374,11 +1419,12 @@ try {
         var oc = (typeof ot.channel === "number") ? (ot.channel | 0) : 0;
         if (oc === chN && on < name) stack++;
       }
-      nm.style.left = "6px";
-      nm.style.top = (2 + stack * 12) + "px";
-      nm.style.transform = "none";
+      nm.style.left = "0px";
+      nm.style.top = "0px";
+      nm.style.transform = "translate(" + (stack * 8) + "px, calc(-100% - 1px))";
     }
-    el.title = (name || "?") + " · track " + chN + (same ? " · same channel (ghost)" : "");
+    el.title = (name || "?") + " · track " + chN +
+      (solid ? " · shared track (solid)" : " · alone on track (ghost)");
   }
 
   var PH_TICK_MS = 33;
@@ -2035,16 +2081,19 @@ try {
     } catch (e) {}
   }
 
-  // ~10 Hz cursors; channel always included
+  // Channel changes = immediate; mouse cursors ~8 Hz (less glitch/spam)
   var lastPresenceSent = 0;
   var presenceFlushTimer = null;
-  var PRESENCE_MIN_MS = 100;
+  var PRESENCE_MIN_MS = 120;
   var lastSentChannel = -999;
   var lastSentXY = { x: -1, y: -1 };
 
   function sendPresence(force) {
     if (!room) return;
     var now = Date.now();
+    var ch = currentChannel() | 0;
+    // Always push track switches immediately so the other screen updates fast
+    if (ch !== lastSentChannel) force = true;
     if (!force && (now - lastPresenceSent) < PRESENCE_MIN_MS) {
       if (!presenceFlushTimer) {
         presenceFlushTimer = setTimeout(function () {
@@ -2058,7 +2107,6 @@ try {
       clearTimeout(presenceFlushTimer);
       presenceFlushTimer = null;
     }
-    var ch = currentChannel() | 0;
     var bar = currentBar() | 0;
     var x = Math.round(pointerState.x * 1000) / 1000;
     var y = Math.round(pointerState.y * 1000) / 1000;
@@ -2066,10 +2114,10 @@ try {
     // skip tiny mouse noise when channel unchanged
     if (!force && ch === lastSentChannel && lastSentXY.x >= 0) {
       var md = Math.abs(x - lastSentXY.x) + Math.abs(y - lastSentXY.y);
-      if (md < 0.006 && inside && (now - lastPresenceSent) < 450) return;
+      if (md < 0.008 && inside && (now - lastPresenceSent) < 500) return;
     }
     var key = x + "," + y + "," + (inside ? 1 : 0) + "," + ch + "," + bar;
-    if (!force && key === lastPresenceKey && (now - lastPresenceSent) < 800) return;
+    if (!force && key === lastPresenceKey && (now - lastPresenceSent) < 700) return;
     lastPresenceKey = key;
     lastPresenceSent = now;
     lastSentChannel = ch;
@@ -2803,12 +2851,13 @@ try {
         if (t0 && t0.playing) sendTransport(true, { playing: true, bar: t0.bar, allowDup: true });
       }, 16);
     } else if (msg.type === "heartbeat") {
-      // Light keep-alive only — never seek playhead
+      // Light keep-alive only — never seek playhead; less song thrash = less glitch
       resumeAllAudio();
       if (msg.sig != null && lastApplied && lastSongSig != null && msg.sig !== lastSongSig) {
         if (!localInteract) requestFullSync();
       }
-      if (msg.song && msg.song !== lastApplied) {
+      // only re-apply song payload when we truly don't have it / drifted
+      if (msg.song && msg.song !== lastApplied && !localInteract) {
         applySong(msg.song, false, msg.songTs || msg.ts || 0);
       }
       if (msg.sig != null) lastSongSig = msg.sig;
