@@ -2182,7 +2182,7 @@ try {
     var t = getTransport();
     if (!t || !t.playing) return;
     var now = Date.now();
-    if (now - lastPlayheadSyncSent < 1500) return;
+    if (now - lastPlayheadSyncSent < 900) return; // was 1500ms — tighter mid-play align
     lastPlayheadSyncSent = now;
     sendTransport(true, {
       soft: true,
@@ -2209,7 +2209,7 @@ try {
         playhead: t.playhead,
         allowDup: true
       });
-    }, 16);
+    }, 8); // was 16ms — play/stop edges snappier
   }
 
   /** Host restart (Ctrl+F / F) — one clean restart packet, not a burst of play/stop */
@@ -2282,7 +2282,7 @@ try {
     } catch (e2) {}
   }
 
-  // Debounced flush: wait until user pauses editing, then one send (wider gap online = less fight)
+  // Debounced flush: short pause after edits, then one send (snappier note sync)
   function scheduleSendState(force) {
     if (force) {
       if (stateDebounceTimer) clearTimeout(stateDebounceTimer);
@@ -2294,7 +2294,7 @@ try {
     stateDebounceTimer = setTimeout(function () {
       stateDebounceTimer = null;
       sendState(false);
-    }, 40);
+    }, 16); // was 40ms — notes reach friends sooner
   }
 
   function scheduleSendTransport(force) {
@@ -2318,7 +2318,7 @@ try {
             scheduleSendState(true);
             flushPendingRemote();
           }
-        }, 600);
+        }, 320); // was 600ms — unstick "editing" lock faster
       };
       var onUp = function () {
         localInteract = false;
@@ -2389,13 +2389,14 @@ try {
     } catch (e) {}
   }
 
-  // Multiplayer cursors — balanced rate; much slower when tab hidden / idle
+  // Multiplayer cursors — faster while moving; quiet when tab hidden
   var lastPresenceSent = 0;
   var presenceFlushTimer = null;
-  var PRESENCE_MIN_MS = 40;       // ~25 Hz while moving (efficient + smooth)
-  var PRESENCE_HIDDEN_MS = 400;   // tab in background
+  var PRESENCE_MIN_MS = 24;       // ~40 Hz while moving (was 40ms / ~25 Hz)
+  var PRESENCE_HIDDEN_MS = 500;   // tab in background
   var lastSentChannel = -999;
   var lastSentXY = { x: -1, y: -1 };
+  var lastSentStatus = "";
 
   function presenceMinMs() {
     try {
@@ -2431,32 +2432,53 @@ try {
     // skip tiny mouse noise when channel unchanged
     if (!force && ch === lastSentChannel && lastSentXY.x >= 0) {
       var md = Math.abs(x - lastSentXY.x) + Math.abs(y - lastSentXY.y);
-      if (md < 0.002 && inside && (now - lastPresenceSent) < 90) return;
+      if (md < 0.0015 && inside && (now - lastPresenceSent) < 60) return;
     }
-    var key = x + "," + y + "," + (inside ? 1 : 0) + "," + ch + "," + bar;
-    if (!force && key === lastPresenceKey && (now - lastPresenceSent) < 150) return;
+    var st = myStatus || "edit";
+    var key = x + "," + y + "," + (inside ? 1 : 0) + "," + ch + "," + bar + "," + st;
+    if (!force && key === lastPresenceKey && (now - lastPresenceSent) < 100) return;
     lastPresenceKey = key;
     lastPresenceSent = now;
     lastSentChannel = ch;
     lastSentXY.x = x;
     lastSentXY.y = y;
+    // Slim payload — server already knows name/room from the socket
     var payload = {
       type: "presence",
-      name: getName(),
       channel: ch,
       bar: bar,
       x: x,
       y: y,
       inside: inside,
-      status: myStatus || "edit",
-      room: room,
-      tabId: tabId,
       ts: now
     };
+    // status only when it changes (less bandwidth)
+    if (st !== lastSentStatus || force) {
+      payload.status = st;
+      lastSentStatus = st;
+    }
     try {
       if (ws && ws.readyState === 1) ws.send(JSON.stringify(payload));
     } catch (e) {}
-    try { if (bc) bc.postMessage(payload); } catch (e2) {}
+    // same-PC tabs still get a named copy
+    try {
+      if (bc) {
+        var bcPayload = {
+          type: "presence",
+          name: getName(),
+          channel: ch,
+          bar: bar,
+          x: x,
+          y: y,
+          inside: inside,
+          status: st,
+          room: room,
+          tabId: tabId,
+          ts: now
+        };
+        bc.postMessage(bcPayload);
+      }
+    } catch (e2) {}
   }
 
   function peersMetaKey(list) {
@@ -3103,18 +3125,18 @@ try {
         var s = currentSong();
         if (s && s !== lastApplied) applySong(lastApplied, false, lastRemoteTs || Date.now());
       }
-    }, 120);
+    }, 80); // was 120ms — catch channel/play edges sooner
     presenceTimer = setInterval(function () {
       if (document.hidden) return;
       sendPresence(false);
-    }, 280);
+    }, 150); // was 280ms
     pingTimer = setInterval(function () {
       try {
         if (ws && ws.readyState === 1) {
           ws.send(JSON.stringify({ type: "ping", t: Date.now() }));
         }
       } catch (e) {}
-    }, 8000);
+    }, 12000); // was 8s — less noise; RTT still measured
     enableGhostChannels();
     lastLocalChannel = currentChannel();
     sendPresence(true);

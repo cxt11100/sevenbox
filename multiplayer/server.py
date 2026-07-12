@@ -315,6 +315,35 @@ class Room:
         if len(self.ghost_tape) > 720:
             self.ghost_tape = self.ghost_tape[-720:]
 
+    def presence_peers(self) -> list[dict[str, Any]]:
+        """Lightweight peer list for high-frequency cursor broadcasts."""
+        out = []
+        for c in self.clients:
+            p = self.presence.get(c) or {}
+            x = p.get("x")
+            y = p.get("y")
+            if x is None and y is None and not p.get("inside"):
+                # still include so clients can hide remote cursors
+                pass
+            try:
+                ch = int(p.get("channel", 0) or 0)
+            except (TypeError, ValueError):
+                ch = 0
+            if ch < 0:
+                ch = 0
+            nm = self.names.get(c, "player")
+            out.append(
+                {
+                    "name": nm,
+                    "channel": ch,
+                    "x": x,
+                    "y": y,
+                    "inside": bool(p.get("inside", x is not None and y is not None)),
+                    "status": str(p.get("status") or "edit"),
+                }
+            )
+        return out
+
     def peer_list(self) -> list[dict[str, Any]]:
         self.purge_timeouts()
         out = []
@@ -574,22 +603,21 @@ async def broadcast_room(
 
 
 async def flush_presence(room: Room) -> None:
-    """~30 Hz presence batch (smooth cursors, lighter free-tier CPU)."""
+    """~45 Hz presence batch with slim peer payload (faster cursors, less JSON)."""
     try:
-        await asyncio.sleep(0.033)
+        await asyncio.sleep(0.022)
         if room.code not in rooms or rooms.get(room.code) is not room:
             return
         if not room._presence_dirty:
             return
         room._presence_dirty = False
+        # Slim message: no title/public/roles on every cursor tick
         await broadcast_room(
             room,
             {
                 "type": "presence",
-                "peers": room.peer_list(),
+                "peers": room.presence_peers(),
                 "count": len(room.clients),
-                "title": room.title,
-                "public": room.public,
             },
         )
     except Exception:
@@ -1052,7 +1080,7 @@ async def ws_handler(ws: ServerConnection) -> None:
                     },
                     skip=ws,
                 )
-                await maybe_broadcast_lobby(room)
+                # Lobby only cares about count/playing — skip rebroadcast on every note
 
             elif mtype == "transport":
                 code = client_room.get(ws)
