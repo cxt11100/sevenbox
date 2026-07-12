@@ -206,6 +206,14 @@ try {
   var wantRoom = null;       // room code to auto-rejoin after drop
   var rejoinTimer = null;
   var rejoinAttempts = 0;
+  // Remember host session so we can re-create the same code after free-host restart
+  var lastRoomMeta = {
+    code: "",
+    title: "",
+    public: true,
+    wasHost: false,
+    defaultRole: "edit"
+  };
   var lastPresenceKey = "";
   var lastSongSig = null;
   var liveStats = { online: 0, inRooms: 0, rooms: 0, public: 0, lobby: [] };
@@ -3263,6 +3271,13 @@ try {
       roomTitle = msg.title || "";
       myRole = msg.role || (msg.type === "created" ? "host" : "edit");
       isHost = myRole === "host" || msg.type === "created";
+      lastRoomMeta = {
+        code: String(room || "").toUpperCase(),
+        title: roomTitle || "",
+        public: msg.public !== false,
+        wasHost: !!isHost,
+        defaultRole: msg.defaultRole || "edit"
+      };
       if (msg.you) setName(msg.you);
       setConnectedUi(true);
       if (codeEl) codeEl.value = room;
@@ -3479,12 +3494,42 @@ try {
       playGhostTape(msg.tape || []);
     } else if (msg.type === "error") {
       var em = msg.message || "error";
-      setStatus(em, "err");
-      // room gone (host left alone / sleep kill) — stop endless rejoin
+      // Room wiped (server restart / free host sleep) — recover instead of dead-end
       if (wantRoom && /not found|closed/i.test(em)) {
-        wantRoom = null;
+        var goneCode = wantRoom;
         if (rejoinTimer) { clearTimeout(rejoinTimer); rejoinTimer = null; }
         setSyncPill(false);
+        // Host: re-create same code so friends can rejoin
+        if (lastRoomMeta.wasHost && lastRoomMeta.code && lastRoomMeta.code === String(goneCode).toUpperCase()) {
+          setStatus(
+            "Room " + goneCode + " was wiped (server restarted). Re-hosting it…",
+            "err"
+          );
+          showToast("Server restarted — re-hosting " + goneCode, "err");
+          wantRoom = goneCode;
+          rehostWipedRoom(goneCode);
+        } else {
+          // Non-host: keep trying a few times (host may be re-creating)
+          if (rejoinAttempts < 8) {
+            setStatus(
+              "Room " + goneCode + " is gone for a moment (server may have restarted). Retrying…",
+              "err"
+            );
+            showToast("Room missing — retrying join…", "err");
+            scheduleRejoin();
+          } else {
+            wantRoom = null;
+            setStatus(
+              "Room " + goneCode + " no longer exists — free host restarted and wiped rooms. " +
+              "Ask the host to re-create, then join the new code/link.",
+              "err"
+            );
+            showToast("Room gone after server restart", "err");
+            setConnectedUi(false);
+          }
+        }
+      } else {
+        setStatus(em, "err");
       }
     } else if (msg.type === "chat") {
       appendChatLine(msg);
@@ -3515,6 +3560,38 @@ try {
     }
   }
 
+  function rehostWipedRoom(code) {
+    code = String(code || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (!code || !requireName()) return;
+    connectForAction(function () {
+      if (!ws || ws.readyState !== 1) {
+        scheduleRejoin();
+        return;
+      }
+      var nm = getName();
+      var title = lastRoomMeta.title || (titleEl && titleEl.value) || randomRoomTitle();
+      var isPublic = lastRoomMeta.public !== false;
+      var defRole = lastRoomMeta.defaultRole || "edit";
+      try {
+        ws.send(JSON.stringify({
+          type: "create",
+          name: nm,
+          nameKey: nameKeyForSend(nm),
+          title: title,
+          public: isPublic,
+          room: code, // prefer same code after wipe
+          song: currentSong(),
+          bpm: currentBpm(),
+          defaultRole: defRole,
+          channel: currentChannel(),
+          bar: currentBar()
+        }));
+      } catch (e) {
+        setStatus("Couldn't re-host — try Create room again", "err");
+      }
+    });
+  }
+
   function scheduleRejoin() {
     if (!wantRoom) return;
     if (rejoinTimer) clearTimeout(rejoinTimer);
@@ -3523,6 +3600,12 @@ try {
     rejoinTimer = setTimeout(function () {
       rejoinTimer = null;
       if (!wantRoom) return;
+      // After several failed joins, host re-creates; non-host keeps trying
+      if (lastRoomMeta.wasHost && rejoinAttempts >= 2) {
+        setStatus("Re-hosting wiped room " + wantRoom + "…", "err");
+        rehostWipedRoom(wantRoom);
+        return;
+      }
       setStatus("Reconnecting to room " + wantRoom + "…", "err");
       ensureLobby(function () {
         if (!wantRoom || !ws || ws.readyState !== 1) {

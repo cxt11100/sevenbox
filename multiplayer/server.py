@@ -835,7 +835,18 @@ async def ws_handler(ws: ServerConnection) -> None:
                     if role_default not in ("edit", "view"):
                         role_default = "edit"
 
-                    code = new_code()
+                    # Prefer a requested code after server restart (host re-create same room)
+                    preferred = normalize_code(msg.get("room") or msg.get("code") or "")
+                    if (
+                        preferred
+                        and len(preferred) >= 4
+                        and len(preferred) <= 8
+                        and preferred not in rooms
+                        and all(ch in CODE_CHARS for ch in preferred)
+                    ):
+                        code = preferred
+                    else:
+                        code = new_code()
                     room = Room(code, ws, name, title, public)
                     room.default_role = role_default
                     room.clients.add(ws)
