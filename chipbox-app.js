@@ -1,10 +1,10 @@
 
 
 if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|android|ipad|playbook|silk/i.test(navigator.userAgent) ) {
-// SevenBox layout may not include classic BeepBox help nodes — guard nulls (iPhone crash fix)
+// BeepBox layout may not include classic BeepBox help nodes — guard nulls (iPhone crash fix)
 var _sb;
 _sb = document.getElementById("introduction");
-if (_sb) _sb.innerHTML = "SevenBox: sketch instrumental music. Turn volume up, then press play.";
+if (_sb) _sb.innerHTML = "BeepBox: sketch instrumental music. Turn volume up, then press play.";
 _sb = document.getElementById("keyboard-instructions");
 if (_sb) _sb.style.display = "none";
 _sb = document.getElementById("bar-editing");
@@ -38,7 +38,7 @@ var beepbox=function(t){"use strict";
 
 // Safe boot for phone + desktop
 var editor = null;
-(function bootSevenBox() {
+(function bootBeepBox() {
   var splash = document.getElementById("sb-splash");
   var msg = document.getElementById("sb-splash-msg");
   var err = document.getElementById("sb-splash-err");
@@ -79,7 +79,7 @@ var editor = null;
 })();
 
 
-/* SevenBox studio chrome */
+/* Studio chrome */
 (function () {
   var tips = document.getElementById("text-content");
   var tipsBtn = document.getElementById("bbn-tips");
@@ -94,7 +94,7 @@ var editor = null;
   if (tipsTop) tipsTop.addEventListener("click", toggleTips);
 })();
 
-/* SevenBox multiplayer client v3 — lobby + public/private */
+/* BeepBox multiplayer client */
 try {
 (function () {
   var statusEl = document.getElementById("sb-mp-status");
@@ -3645,7 +3645,7 @@ try {
       return;
     }
     var link = inviteUrl(code);
-    var text = "SevenBox jam\n" + link + "\nCode: " + code;
+    var text = "BeepBox jam\n" + link + "\nCode: " + code;
     function ok() {
       setStatus("Invite link copied — send it to friends", "on");
       if (bannerEl) {
@@ -4057,7 +4057,7 @@ try {
               box.innerHTML =
                 "LAN links only work when running the server on your PC.<br>" +
                 "Friends on the same Wi‑Fi open: <b>http://YOUR-IP:8765/chipbox.html</b><br>" +
-                "Online host: share the public SevenBox link instead.";
+                "Online host: share the public site link instead.";
               return;
             }
             box.innerHTML =
@@ -4098,5 +4098,5 @@ try {
   }, 400);
 })();
 } catch (__sbMpErr) {
-  try { console.warn('SevenBox multiplayer failed (studio still works)', __sbMpErr); } catch (_) {}
+  try { console.warn('Multiplayer failed (studio still works)', __sbMpErr); } catch (_) {}
 }

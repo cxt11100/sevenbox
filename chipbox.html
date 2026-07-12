@@ -3,7 +3,7 @@
 <head>
 	<meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-	<title>SevenBox</title>
+	<title>BeepBox Multiplayer</title>
 	<meta name="mobile-web-app-capable" content="yes" />
 	<meta name="apple-mobile-web-app-capable" content="yes" />
 	<meta name="apple-mobile-web-app-status-bar-style" content="black" />
@@ -122,7 +122,7 @@
 			}
 		}
 	
-/* SevenBox = BeepBox classic layout (beepbox.co style) + multiplayer */
+/* BeepBox classic layout + multiplayer */
 html {
   background: #000 !important;
   font-family: "Roboto", system-ui, "Segoe UI", sans-serif !important;
@@ -2500,11 +2500,11 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
 
   // Native script load — Safari handles this much better than fetch+eval
   var s = document.createElement("script");
-  s.src = "chipbox-app.js?v=mp62";
+  s.src = "chipbox-app.js?v=mp63";
   s.async = false;
   s.onload = function () {
     setMsg("Engine loaded — starting…");
-    // bootSevenBox runs inside chipbox-app.js; force-clear splash if still stuck
+    // boot runs inside chipbox-app.js; force-clear splash if still stuck
     setTimeout(function () {
       var sp = document.getElementById("sb-splash");
       if (sp && !sp.classList.contains("sb-failed")) {

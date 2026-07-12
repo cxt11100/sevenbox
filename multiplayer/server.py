@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SevenBox multiplayer server v4
+BeepBox multiplayer server
 - Public/private rooms with titles
 - Live lobby list for public servers
 - Edit/view roles, presence, song sync
@@ -739,7 +739,7 @@ async def ws_handler(ws: ServerConnection) -> None:
             ws,
             {
                 "type": "hello",
-                "app": "SevenBox",
+                "app": "BeepBox Multiplayer",
                 "v": 6,
                 "online": stats["online"],
                 "inRooms": stats["inRooms"],
@@ -1882,7 +1882,7 @@ async def process_request(connection: ServerConnection, request: Request) -> Res
         body = json.dumps(
             {
                 "ok": True,
-                "app": "SevenBox",
+                "app": "BeepBox Multiplayer",
                 "v": 8, "createFix": True,
                 "online": st["online"],
                 "inRooms": st["inRooms"],
@@ -2035,7 +2035,7 @@ async def main_async(host: str, port: int) -> None:
     def log(msg: str) -> None:
         print(msg, flush=True)
 
-    log("SevenBox multiplayer v6 — owner admin + site themes")
+    log("BeepBox multiplayer — owner admin + site themes")
     log(f"  Binding: {host}:{port}")
     log(f"  Open:    http://127.0.0.1:{port}/chipbox.html")
     log(f"  WS:      ws://127.0.0.1:{port}/ws")

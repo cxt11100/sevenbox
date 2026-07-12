@@ -1,4 +1,4 @@
-# SevenBox
+# BeepBox Multiplayer
 **Chiptune studio** — sketch songs in the browser and jam live with friends.
 
 Free online chiptune song editor with multiplayer rooms and a permanent free host. Open for everyone to use.
@@ -42,12 +42,12 @@ Everyone always uses the **same link**:
 **Free host note**: The Render free tier sleeps when idle. First load can take 30–60 seconds. Refresh and wait if needed.
 
 For questions, room codes, finding people to jam with, or help — join the Discord:  
-**[Join SevenBox Discord](https://discord.gg/j9HQdatjP)**
+**[Join BeepBox Multiplayer Discord](https://discord.gg/j9HQdatjP)**
 
 ---
 
 ## Run Locally
-You can run SevenBox completely offline for solo use or development.
+You can run BeepBox Multiplayer completely offline for solo use or development.
 
 ### Requirements
 - Python 3.10 or higher
@@ -69,7 +69,7 @@ Easier Launch (if available)
 Run one of these if present in the folder:
 Bash./start-sevenbox.sh
 # or
-python SevenBox-Launcher.py
+python BeepBox Multiplayer-Launcher.py
 Local Multiplayer (LAN only)
 
 You use: http://127.0.0.1:8765/chipbox.html
