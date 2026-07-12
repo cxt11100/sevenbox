@@ -1974,7 +1974,7 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
     <input id="sb-gate-input" type="text" maxlength="24" placeholder="" autocomplete="off" enterkeyhint="done" spellcheck="false" />
     <input id="sb-gate-key" type="password" maxlength="32" placeholder="Owner key (only for name seven)" style="display:none" autocomplete="off" />
     <p id="sb-gate-err" style="display:none;color:#ff8a9a;font-size:12px;margin:0 0 10px"></p>
-    <button type="button" id="sb-gate-go" disabled>Enter SevenBox</button>
+    <button type="button" id="sb-gate-go" disabled>Enter</button>
   </div>
 </div>
 
@@ -1983,20 +1983,20 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
 <div id="sb-site-announce" role="status" aria-live="polite"></div>
 <div id="sb-splash" aria-live="polite">
   <div class="sb-spin" aria-hidden="true"></div>
-  <h1>SevenBox</h1>
+  <h1>BeepBox</h1>
   <p id="sb-splash-msg">Loading studio… first open can take a few seconds on phone.</p>
   <p class="sb-err" id="sb-splash-err"></p>
 </div>
 <div class="sb-app">
   <!-- Classic BeepBox order: editor first, then multiplayer, then instructions -->
   <div id="beepboxEditorContainer">
-    <noscript>Sorry, SevenBox needs JavaScript on to run.</noscript>
+    <noscript>Sorry, this editor needs JavaScript on to run.</noscript>
   </div>
 
   <div class="sb-mp" id="sb-mp">
         <div class="sb-mp-head">
           <span class="sb-mp-title">Multiplayer</span>
-          <div id="sb-online-bar" title="People connected to SevenBox right now">
+          <div id="sb-online-bar" title="People connected right now">
             <span class="sb-on-pill"><span class="sb-on-live" aria-hidden="true"></span> Online <span class="n" id="sb-online-count">—</span></span>
             <span class="sb-on-meta"><span id="sb-online-inrooms">0</span> in rooms · <span id="sb-online-rooms">0</span> rooms · <span id="sb-online-public">0</span> public</span>
           </div>
@@ -2194,14 +2194,14 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
       </div>
 
     <div id="text-content" class="bbn-open">
-      <h1>SevenBox</h1>
+      <h1>BeepBox</h1>
       <p>
-        SevenBox is an online tool for sketching and sharing instrumental music —
-        like <a href="https://www.beepbox.co/" target="_blank" rel="noopener">BeepBox</a>,
+        An online tool for sketching and sharing instrumental music
+        (same editor as <a href="https://www.beepbox.co/" target="_blank" rel="noopener">beepbox.co</a>),
         with <strong>live multiplayer</strong> so friends can jam in the same song.
       </p>
       <p>
-        All song data is in your browser. When you play multipplayer, the room keeps everyone in sync.
+        All song data is in your browser. Multiplayer keeps the room in sync.
         Songs you create are yours — export anytime. Free to use.
       </p>
 
@@ -2216,7 +2216,7 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
       <h2>Instructions</h2>
       <p>
         You can add or remove notes by clicking on the gray rows at the top.
-        SevenBox automatically plays the notes out loud for you. Try it!
+        The editor automatically plays the notes out loud for you. Try it!
       </p>
       <p>
         Notes go into patterns, and you can edit one pattern at a time.
@@ -2225,7 +2225,7 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
         to swap which pattern is played during that part of the song.
       </p>
       <p>
-        SevenBox can play several rows of patterns simultaneously, and each row has its own set of patterns.
+        You can play several rows of patterns simultaneously, and each row has its own set of patterns.
         Most rows can play melodies or harmonies, but the bottom row is for drums.
       </p>
       <p>
@@ -2250,13 +2250,10 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
 
       <h2>About</h2>
       <p>
-        SevenBox is based on the BeepBox editor by
-        <a href="https://johnnesky.com/" target="_blank" rel="noopener">John Nesky</a>,
-        with multipplayer rooms added for live jams.
-        Neither SevenBox nor BeepBox claim ownership of songs you create.
-      </p>
-      <p>
-        SevenBox multiplayer editor.
+        Editor by
+        <a href="https://johnnesky.com/" target="_blank" rel="noopener">John Nesky</a>
+        (BeepBox). Multiplayer rooms are an add-on for live jams.
+        Neither this site nor BeepBox claim ownership of songs you create.
       </p>
 
       <details class="sb-updates" id="sb-updates" open>
@@ -2265,12 +2262,12 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
           <div class="sb-update-item">
             <div class="when">How it started</div>
             <div class="what">
-              <strong>SevenBox began as BeepBox in the browser</strong> — the classic free chiptune editor
-              by John Nesky — so anyone can sketch songs with no install.
-              We added a <strong>permanent free multiplayer host</strong> so friends can open one link,
-              host or join rooms, and jam on the same song in real time (notes, play/stop, restart).
-              Early goals: work on phone + PC, survive free-host sleep/wake, keep the editor stable,
-              and make hosting for friends as simple as “enter a name → create or join.”
+              Built on the classic free <strong>BeepBox</strong> editor by John Nesky so anyone can
+              sketch songs with no install. A <strong>permanent free multiplayer host</strong> was
+              added so friends can open one link, host or join rooms, and jam on the same song
+              in real time (notes, play/stop, restart). Early goals: phone + PC, survive free-host
+              sleep/wake, keep the editor stable, and make hosting as simple as
+              “enter a name → create or join.”
             </div>
           </div>
 
@@ -2374,16 +2371,14 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
             <div class="what">
               System messages when someone <strong>joins or leaves</strong> (toast + chat, auto-fade).
               Stopped “edited the song” popup spam. Fixed double join/leave notices.
-              Branding: <strong>sevenbox</strong> (not sevebox 4.2.2).
             </div>
           </div>
 
           <div class="sb-update-item">
             <div class="when">Always free to jam</div>
             <div class="what">
-              Same link for everyone:
-              <a href="https://sevenbox.onrender.com/chipbox.html">sevenbox.onrender.com</a>.
-              Free host may sleep when idle (~30–60s first wake). Songs stay yours — export anytime.
+              Same public link for everyone. Free host may sleep when idle (~30–60s first wake).
+              Songs stay yours — export anytime.
             </div>
           </div>
         </div>
@@ -2393,11 +2388,10 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
   <footer class="sb-footer">
     <div class="sb-footer-inner">
       <div>
-        <strong>SevenBox</strong> — free online chiptune editor with multiplayer rooms.
-        Based on BeepBox by John Nesky.
+        Free multiplayer BeepBox jam — editor by John Nesky.
       </div>
       <div class="sb-credits">
-        <span>sevenbox</span>
+        <span></span>
       </div>
     </div>
   </footer>
@@ -2499,14 +2493,14 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
   function setMsg(t) { if (msg) msg.textContent = t; }
   function fail(t) {
     if (splash) splash.classList.add("sb-failed");
-    setMsg("Couldn't load SevenBox");
+    setMsg("Couldn't load the studio");
     if (err) err.textContent = t;
   }
   setMsg("Loading studio on iPhone/PC…");
 
   // Native script load — Safari handles this much better than fetch+eval
   var s = document.createElement("script");
-  s.src = "chipbox-app.js?v=mp60";
+  s.src = "chipbox-app.js?v=mp62";
   s.async = false;
   s.onload = function () {
     setMsg("Engine loaded — starting…");
