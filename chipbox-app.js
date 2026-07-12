@@ -3386,12 +3386,8 @@ try {
       }
       if (msg.title) roomTitle = msg.title;
       if (msg.jamEvent && msg.jamEvent.text) {
+        // Activity log only — join/leave chat toasts come from type "sys" (once)
         appendJamLine(msg.jamEvent.text);
-        // Fallback join/leave notice if dedicated sys packet was missed
-        var jk = msg.jamEvent.kind || "";
-        if (jk === "join" || jk === "leave") {
-          announcePresence(msg.jamEvent.text, jk);
-        }
       }
       if (msg.host && bannerEl && room && !isHost) {
         bannerEl.textContent = "In \"" + (roomTitle || room) + "\" as " + myRole + ". Host: " + msg.host + ".";
