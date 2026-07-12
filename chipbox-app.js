@@ -2499,17 +2499,40 @@ try {
     if (chatLog) chatLog.innerHTML = "";
   }
 
-  // Dedupe join/leave so peers jamEvent + sys packet don't double-fire
-  var lastPresenceAnnounce = "";
+  // Dedupe join/leave (sys packet + peers jamEvent used to fire twice)
+  var lastPresenceAnnounceKey = "";
   var lastPresenceAnnounceAt = 0;
+
+  function presenceAnnounceKey(text, kind) {
+    // Normalize "alex joined" / "alex joined the room" → same key
+    var t = String(text || "").trim().toLowerCase();
+    t = t.replace(/\s+the room\s*$/i, "").replace(/\s+/g, " ").trim();
+    var k = String(kind || "").toLowerCase();
+    if (!k) {
+      if (/\bjoined\b/.test(t)) k = "join";
+      else if (/\bleft\b/.test(t)) k = "leave";
+    }
+    return k + "|" + t;
+  }
 
   function announcePresence(text, kind) {
     text = String(text || "").trim();
     if (!text) return;
     var now = Date.now();
-    if (text === lastPresenceAnnounce && now - lastPresenceAnnounceAt < 1500) return;
-    lastPresenceAnnounce = text;
+    var key = presenceAnnounceKey(text, kind);
+    if (key && key === lastPresenceAnnounceKey && now - lastPresenceAnnounceAt < 4000) return;
+    lastPresenceAnnounceKey = key;
     lastPresenceAnnounceAt = now;
+    // Prefer full wording for display
+    var display = text;
+    if (kind === "join" && !/joined the room/i.test(display)) {
+      display = display.replace(/\s*joined\s*$/i, " joined the room");
+      if (!/joined/i.test(display)) display = text + " joined the room";
+    }
+    if (kind === "leave" && !/left the room/i.test(display)) {
+      display = display.replace(/\s*left\s*$/i, " left the room");
+      if (!/left/i.test(display)) display = text + " left the room";
+    }
     // Ensure chat is open so the notice is visible
     setChatOpen(true);
     appendChatLine({
@@ -2517,11 +2540,11 @@ try {
       sys: true,
       temporary: true,
       kind: kind || "",
-      text: text
+      text: display
     });
-    showToast(text, kind === "leave" ? "err" : "edit");
+    showToast(display, kind === "leave" ? "err" : "edit");
     // Also flash status line briefly
-    setStatus(escapeHtml(text), "on");
+    setStatus(escapeHtml(display), "on");
   }
 
   function appendChatLine(msg) {
