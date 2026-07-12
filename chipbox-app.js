@@ -779,16 +779,20 @@ try {
     if (!show) keyEl.value = "";
   }
   function getName() {
+    // Session only — never pull old names from storage into the UI
     var n = (nameEl && nameEl.value || "").trim();
-    if (!n) try { n = localStorage.getItem(NAME_KEY) || ""; } catch (e) {}
+    if (!n && gateInput && gate && !gate.classList.contains("sb-hide")) {
+      n = (gateInput.value || "").trim();
+    }
     return n.slice(0, 24);
   }
   function setName(n) {
     n = normalizeName(n);
     if (!n) return;
-    try { localStorage.setItem(NAME_KEY, n); } catch (e) {}
+    // Do not persist name to localStorage (was re-filling the box on every visit)
+    try { localStorage.removeItem(NAME_KEY); } catch (e) {}
+    // Only update the multiplayer name field — never re-stuff the gate input
     if (nameEl) nameEl.value = n;
-    if (gateInput) gateInput.value = n;
   }
   function nameKeyForSend(n) {
     if (!nameLooksLikeSeven(n)) return "";
@@ -835,36 +839,26 @@ try {
 
   (function setupGate() {
     var gateKey = document.getElementById("sb-gate-key");
-    var saved = "";
-    try { saved = localStorage.getItem(NAME_KEY) || ""; } catch (e) {}
 
-    // Never pre-fill junk in the box (old names like seven22222222). Empty box only.
+    // Always start empty — never restore previous names into the boxes
     function clearNameInputs() {
-      if (gateInput) gateInput.value = "";
-      if (nameEl) nameEl.value = "";
+      if (gateInput) {
+        gateInput.value = "";
+        try { gateInput.setAttribute("autocomplete", "off"); } catch (eA) {}
+      }
+      if (nameEl) {
+        nameEl.value = "";
+        try { nameEl.setAttribute("autocomplete", "off"); } catch (eB) {}
+      }
       if (gateKey) gateKey.value = "";
       toggleGateKey(false);
+      try { localStorage.removeItem(NAME_KEY); } catch (e0) {}
     }
 
-    // Only auto-enter if saved name is still valid format
-    if (saved && !nameLooksLikeSeven(saved) && validateName(saved, "").ok) {
-      setName(saved);
-      if (gate) gate.classList.add("sb-hide");
-    } else {
-      // Drop invalid / reserved saved names so they never reappear in the inputs
-      if (saved) {
-        try { localStorage.removeItem(NAME_KEY); } catch (e0) {}
-      }
-      clearNameInputs();
-      if (gate) gate.classList.remove("sb-hide");
-      if (saved && nameLooksLikeSeven(saved)) {
-        showGateErr("Name \"seven\" is reserved and needs a special key. Type a normal name like jam482 instead.");
-      } else if (saved) {
-        showGateErr("Your old name wasn't valid. Type a nickname + 3–5 numbers (example format: jam482). Box is empty — type a new one.");
-      } else {
-        showGateErr("");
-      }
-    }
+    clearNameInputs();
+    if (gate) gate.classList.remove("sb-hide");
+    showGateErr("");
+
     function syncGo() {
       if (!gateGo || !gateInput) return;
       var n = gateInput.value.trim();
@@ -872,24 +866,38 @@ try {
       if (nameLooksLikeSeven(n)) toggleGateKey(true); else toggleGateKey(false);
     }
     if (gateInput) {
-      // Force empty on open so browser autofill / old values don't stick
-      if (!gate || !gate.classList.contains("sb-hide")) {
-        gateInput.value = "";
-      }
+      gateInput.value = "";
       gateInput.addEventListener("input", syncGo);
       gateInput.addEventListener("keydown", function (e) {
         if (e.key === "Enter" && gateGo && !gateGo.disabled) gateGo.click();
       });
       syncGo();
+      // Beat browser autofill (Chrome often fills after load)
       setTimeout(function () {
         try {
+          if (gateInput && !getName()) gateInput.value = "";
           if (gate && !gate.classList.contains("sb-hide")) {
-            gateInput.value = "";
             gateInput.focus();
             syncGo();
           }
         } catch (e) {}
-      }, 300);
+      }, 50);
+      setTimeout(function () {
+        try {
+          if (gate && !gate.classList.contains("sb-hide") && gateInput) {
+            if (!gateInput.matches(":focus") || !gateInput.value) {
+              /* if autofill stuffed a value without focus interaction, keep it only if user typed */
+            }
+          }
+        } catch (e2) {}
+      }, 400);
+      // Readonly trick then unlock — reduces autofill stuffing
+      try {
+        gateInput.setAttribute("readonly", "readonly");
+        setTimeout(function () {
+          try { gateInput.removeAttribute("readonly"); } catch (e3) {}
+        }, 200);
+      } catch (e4) {}
     }
     if (gateKey) {
       gateKey.addEventListener("keydown", function (e) {
@@ -902,6 +910,9 @@ try {
         var key = gateKey ? gateKey.value : "";
         if (!tryCommitName(n, key, true)) return;
         if (nameLooksLikeSeven(n) && key === SEVEN_KEY) sessionSevenKey = key;
+        // Put committed name only in the multiplayer name field (not left in gate)
+        if (nameEl) nameEl.value = normalizeName(n);
+        if (gateInput) gateInput.value = "";
         if (gate) gate.classList.add("sb-hide");
         setStatus("Hey " + normalizeName(n) + " — host or join a room", "");
         refreshSevenVaultVisibility();
@@ -915,14 +926,14 @@ try {
         if (nameLooksLikeSeven(n)) {
           if (gate) {
             gate.classList.remove("sb-hide");
-            if (gateInput) gateInput.value = n;
+            if (gateInput) gateInput.value = "";
             toggleGateKey(true);
             showGateErr("Name \"seven\" needs the special key.");
           }
-          nameEl.value = getName();
+          nameEl.value = "";
           return;
         }
-        if (!tryCommitName(n, "", false)) nameEl.value = getName();
+        if (!tryCommitName(n, "", false)) nameEl.value = "";
       });
     }
   })();
