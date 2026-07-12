@@ -3448,9 +3448,12 @@ try {
     } else if (msg.type === "chat") {
       appendChatLine(msg);
       // someone sent a message — refresh typing line will arrive separately
+    } else if (msg.type === "sys") {
+      // "X joined/left the room" — temporary chat + toast (not note-edit spam)
+      announcePresence(msg.text || "", msg.kind || "");
     } else if (msg.type === "chat_clear") {
       clearChatLog();
-      appendChatLine({ sys: true, text: "Chat cleared by " + (msg.by || "owner") });
+      appendChatLine({ sys: true, temporary: true, text: "Chat cleared by " + (msg.by || "owner") });
     } else if (msg.type === "typing") {
       setTypingUi(msg.names || []);
     } else if (msg.type === "left") {
