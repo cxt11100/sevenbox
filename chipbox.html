@@ -2259,36 +2259,131 @@ html[data-sb-theme="ice"] .sb-mp button.primary {
         SevenBox multiplayer editor.
       </p>
 
-      <details class="sb-updates" id="sb-updates">
-        <summary>Update board</summary>
+      <details class="sb-updates" id="sb-updates" open>
+        <summary>Update board — full history</summary>
         <div class="sb-updates-body">
           <div class="sb-update-item">
-            <div class="when">2026-07-11 · mp56</div>
+            <div class="when">How it started</div>
             <div class="what">
-              <strong>Medium-big features:</strong>
-              track ownership, song queue + votes, ghost jam replay, LAN party links,
-              host mute/timeout/report, BeepBox editor themes.
+              <strong>SevenBox began as BeepBox in the browser</strong> — the classic free chiptune editor
+              by John Nesky — so anyone can sketch songs with no install.
+              We added a <strong>permanent free multiplayer host</strong> so friends can open one link,
+              host or join rooms, and jam on the same song in real time (notes, play/stop, restart).
+              Early goals: work on phone + PC, survive free-host sleep/wake, keep the editor stable,
+              and make hosting for friends as simple as “enter a name → create or join.”
             </div>
           </div>
+
           <div class="sb-update-item">
-            <div class="when">2026-07-11 · mp55</div>
+            <div class="when">Foundation</div>
             <div class="what">
-              <strong>Classic BeepBox layout + efficiency.</strong>
-              Page matches beepbox.co style; multipplayer under the editor; lighter presence when idle/tab hidden.
+              <strong>Multiplayer core:</strong> public/private rooms, room codes, invite links,
+              song sync (last-write-wins), play/stop + restart for the room, online lobby list,
+              display names, edit/view roles, free host on Render.
+              <strong>Owner tools:</strong> “seven” vault (themes, announce, kick, close room).
+              <strong>Presence:</strong> named cursors so you can see where friends are editing.
             </div>
           </div>
+
           <div class="sb-update-item">
-            <div class="when">2026-07-11 · mp54</div>
-            <div class="what"><strong>Track color swatches</strong> on player chips instead of “track N” text.</div>
-          </div>
-          <div class="sb-update-item">
-            <div class="when">2026-07-11 · mp53–mp52</div>
-            <div class="what"><strong>Unique names</strong> (nickname + 3–5 numbers) and clean empty name gate.</div>
-          </div>
-          <div class="sb-update-item">
-            <div class="when">Earlier</div>
+            <div class="when">Presence experiments → cursors</div>
             <div class="what">
-              Lobby playing/BPM, room chat + typing, OWNER vault, site themes, invite links, free permanent host.
+              Tried multiplayer playhead / track marks so you could see who was on which track.
+              That got confusing and laggy, so we <strong>removed playhead marks</strong> and
+              kept <strong>simple named mouse cursors</strong> with lower lag.
+            </div>
+          </div>
+
+          <div class="sb-update-item">
+            <div class="when">mp46–mp47 · Lobby</div>
+            <div class="what">
+              <strong>Public rooms list</strong> cleaned up. Your own room shows
+              <em>You're here</em> (not Join) so re-joining yourself can’t break host/create.
+              Host blocked while already in a room.
+            </div>
+          </div>
+
+          <div class="sb-update-item">
+            <div class="when">mp48–mp49 · Cursors &amp; timing</div>
+            <div class="what">
+              <strong>Smoother remote cursors</strong> (chase instead of jump).
+              <strong>Tighter play/stop timing</strong> with lag-aware play start and soft mid-play align
+              (still not sample-perfect over the internet — by design).
+            </div>
+          </div>
+
+          <div class="sb-update-item">
+            <div class="when">mp50 · First update board + jam extras</div>
+            <div class="what">
+              Status (editing / listening / AFK), follow track, freeze song, track claims,
+              reactions, QR invite, jam tape, song hash badge. First public update board.
+            </div>
+          </div>
+
+          <div class="sb-update-item">
+            <div class="when">mp51 · Simple connect UI</div>
+            <div class="what">
+              Multiplayer flow: name → public rooms list → Create room / Join code.
+              Advanced options under <em>More</em>. Bigger buttons, clearer labels.
+            </div>
+          </div>
+
+          <div class="sb-update-item">
+            <div class="when">mp52–mp53 · Unique names</div>
+            <div class="what">
+              Names must be <strong>nickname + 3–5 numbers</strong> (e.g. jam482).
+              No duplicates online. Empty “Who are you?” box (no junk prefilled names).
+            </div>
+          </div>
+
+          <div class="sb-update-item">
+            <div class="when">mp54 · Track colors</div>
+            <div class="what">
+              Player chips show a <strong>BeepBox track color</strong> swatch instead of “track 1” text.
+            </div>
+          </div>
+
+          <div class="sb-update-item">
+            <div class="when">mp55 · Looks like BeepBox</div>
+            <div class="what">
+              Page layout closer to <strong>beepbox.co</strong>: black 710px column, editor first,
+              multipplayer under it, classic instructions. Lighter multipplayer when the tab is idle.
+            </div>
+          </div>
+
+          <div class="sb-update-item">
+            <div class="when">mp56 · Medium-big features</div>
+            <div class="what">
+              Song <strong>playlist + votes</strong>, <strong>track ownership</strong>,
+              <strong>ghost jam replay</strong>, <strong>LAN party</strong> links,
+              host <strong>mute / timeout / report</strong>, BeepBox <strong>editor themes</strong>.
+              (Also fixed a server bug that blocked Create room.)
+            </div>
+          </div>
+
+          <div class="sb-update-item">
+            <div class="when">mp57 · Clearer tools</div>
+            <div class="what">
+              “Extra room tools” with numbered sections and plain English
+              (You · Invite · Tracks · Playlist · Host · Fun).
+            </div>
+          </div>
+
+          <div class="sb-update-item">
+            <div class="when">mp58–mp60 · Chat &amp; branding</div>
+            <div class="what">
+              System messages when someone <strong>joins or leaves</strong> (toast + chat, auto-fade).
+              Stopped “edited the song” popup spam. Fixed double join/leave notices.
+              Branding: <strong>sevenbox</strong> (not sevebox 4.2.2).
+            </div>
+          </div>
+
+          <div class="sb-update-item">
+            <div class="when">Always free to jam</div>
+            <div class="what">
+              Same link for everyone:
+              <a href="https://sevenbox.onrender.com/chipbox.html">sevenbox.onrender.com</a>.
+              Free host may sleep when idle (~30–60s first wake). Songs stay yours — export anytime.
             </div>
           </div>
         </div>
