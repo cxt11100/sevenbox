@@ -2876,7 +2876,7 @@ try {
     try {
       // Worker timers are less throttled than page timers on idle Safari
       var src =
-        "var n=0; setInterval(function(){ n++; postMessage({n:n,t:Date.now()}); }, 100);";
+        "var n=0; setInterval(function(){ n++; postMessage({n:n,t:Date.now()}); }, 250);";
       var blob = new Blob([src], { type: "application/javascript" });
       var url = URL.createObjectURL(blob);
       idleWorker = new Worker(url);
@@ -2933,7 +2933,8 @@ try {
       el.loop = true;
       el.preload = "auto";
       el.volume = 0.05;
-      el.src = "silent.wav?v=1";
+      // Load silent keep-alive only once in a room (not on every page load)
+      el.src = "silent.wav?v=2";
       el.style.cssText = "position:fixed;width:0;height:0;opacity:0;pointer-events:none;left:0;top:0;";
       document.body.appendChild(el);
 
@@ -4208,10 +4209,35 @@ try {
   setupSevenVault();
   refreshSevenVaultVisibility();
 
-  // Auto-connect to permanent host lobby (browser-only multiplayer)
-  setTimeout(function () {
-    ensureLobby(function () { tryAutoJoinFromUrl(); });
-  }, 400);
+  // Defer WebSocket until multiplayer is needed — solo editor loads faster
+  // Connect when: invite link has ?room=, user opens multipplayer, or after Enter name
+  (function deferLobbyConnect() {
+    var roomQ = roomFromUrl();
+    if (roomQ) {
+      // Invite links: connect soon so auto-join works
+      setTimeout(function () {
+        ensureLobby(function () { tryAutoJoinFromUrl(); });
+      }, 200);
+      return;
+    }
+    var mp = document.getElementById("sb-mp");
+    var warmed = false;
+    function warm() {
+      if (warmed) return;
+      warmed = true;
+      ensureLobby();
+    }
+    if (mp) {
+      mp.addEventListener("pointerdown", warm, { capture: true, passive: true });
+      mp.addEventListener("focusin", warm, { capture: true });
+    }
+    // Fallback: warm lobby after editor has time to paint (don't block first load)
+    if (typeof requestIdleCallback === "function") {
+      requestIdleCallback(function () { setTimeout(warm, 1500); }, { timeout: 4000 });
+    } else {
+      setTimeout(warm, 2500);
+    }
+  })();
 })();
 } catch (__sbMpErr) {
   try { console.warn('Multiplayer failed (studio still works)', __sbMpErr); } catch (_) {}
